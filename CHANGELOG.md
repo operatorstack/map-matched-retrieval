@@ -22,6 +22,9 @@ All notable changes to this project are documented here.
 - Fix the TopiOCQA loader: read the released JSON/JSONL directly (HuggingFace
   `datasets` dropped the custom dataset script) via `data_path` / the
   `MAPMATCHED_TOPIOCQA_PATH` env var; drop the unused `datasets` dependency.
+- Eval slice fairness: one shared entropy threshold (from pointwise trace
+  entropies) and one provider/graph build per run so all methods are compared
+  on the same follow-up vs standalone slices.
 - Fix the TREC CAsT 2019 loader: use the correct ir-datasets id
   `trec-cast/v1/2019/judged`, load real passage text from the collection
   `docs_store()` (previously the doc id was used as the text), read
