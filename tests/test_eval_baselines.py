@@ -16,12 +16,14 @@ def test_history_concat_changes_query_sequence() -> None:
     provider = BruteForceProvider(passage_ids, passage_embeddings, embedder)
     graph = build_knn_graph(passage_ids, passage_embeddings)
     queries = ("alpha overview introduction", "details transition graph")
-    pointwise_ids, _ = run_pointwise_conversation(
+    pointwise_ids, _, pointwise_rankings = run_pointwise_conversation(
         graph=graph,
         provider=provider,
         queries=queries,
         config=MapMatchedMethodConfig(candidate_limit=4, score_normalization="none"),
     )
+    # β=0 exposes a per-turn candidate ranking whose top is the decoded chunk
+    assert pointwise_rankings[0][0] == pointwise_ids[0]
     history_ids, _ = run_history_concat_conversation(
         provider=provider,
         queries=queries,

@@ -75,9 +75,7 @@ class SentenceTransformerEmbedder:
 
     def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2") -> None:
         try:
-            from sentence_transformers import (  # type: ignore[import-not-found]
-                SentenceTransformer,
-            )
+            from sentence_transformers import SentenceTransformer
         except ImportError as error:  # pragma: no cover - optional dependency
             raise ImportError(
                 "SentenceTransformerEmbedder requires sentence-transformers: "

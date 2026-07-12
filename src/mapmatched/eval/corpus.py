@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from mapmatched import KNNGraph, ScoredCandidate
+from mapmatched.graph import InMemoryCorpusGraph
 
 from .embedder import PassageEmbedder, QueryEmbedder, dot_product
 from .types import Passage
@@ -74,3 +75,23 @@ def build_knn_graph(
         [list(values) for values in passage_embeddings],
         neighbor_count=neighbor_count,
     )
+
+
+def build_section_graph(passages: Sequence[Passage]) -> InMemoryCorpusGraph:
+    """A structured corpus graph: passages sharing a `group_key` (e.g. the same
+    Wikipedia article / section) are connected; passages in different groups are
+    unconnected, so their geodesic distance clamps to `maximum_distance` — a
+    coherent-drill / expensive-jump prior. Passages without a group_key (or in a
+    singleton group) are isolated nodes."""
+    passage_ids = [passage.passage_id for passage in passages]
+    groups: dict[str, list[str]] = {}
+    for passage in passages:
+        if passage.group_key is None:
+            continue
+        groups.setdefault(passage.group_key, []).append(passage.passage_id)
+    edges: list[tuple[str, str]] = []
+    for members in groups.values():
+        anchor = members[0]
+        for other in members[1:]:
+            edges.append((anchor, other))
+    return InMemoryCorpusGraph.from_edges(edges, nodes=passage_ids)

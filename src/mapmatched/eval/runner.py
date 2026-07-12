@@ -6,7 +6,12 @@ from mapmatched import CorpusGraph
 
 from .baselines import MapMatchedMethodConfig, run_mapmatched_conversation
 from .baselines.methods import run_maximal_marginal_relevance_conversation
-from .corpus import BruteForceProvider, build_knn_graph, build_passage_embeddings
+from .corpus import (
+    BruteForceProvider,
+    build_knn_graph,
+    build_passage_embeddings,
+    build_section_graph,
+)
 from .embedder import TextEmbedder
 from .metrics import ndcg_at_k, recall_at_k, turn_ranked_relevances
 from .slices import (
@@ -45,6 +50,7 @@ def run_method_on_conversation(
     graph: CorpusGraph,
     method: MethodSpec,
     config: MapMatchedMethodConfig,
+    ranking_mode: str = "full",
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[float | None, ...]]:
     queries = [turn.query for turn in conversation.turns]
     method_config = MapMatchedMethodConfig(
@@ -65,13 +71,17 @@ def run_method_on_conversation(
                 fixed_lag=method_config.fixed_lag,
                 score_normalization=config.score_normalization,
             )
-        decoded_ids, entropies = run_mapmatched_conversation(
+        decoded_ids, entropies, candidate_rankings = run_mapmatched_conversation(
             graph=graph,
             provider=provider,
             queries=queries,
             config=method_config,
         )
-        return _rankings_with_decoded_first(provider, queries, decoded_ids), entropies
+        if ranking_mode == "full":
+            trajectory_rankings = _rankings_from_trajectory(provider, queries, candidate_rankings)
+        else:
+            trajectory_rankings = _rankings_with_decoded_first(provider, queries, decoded_ids)
+        return trajectory_rankings, entropies
     if method.name == "history_concat":
         rankings: list[tuple[str, ...]] = []
         history: list[str] = []
@@ -112,6 +122,23 @@ def _rankings_with_decoded_first(
     return tuple(rankings)
 
 
+def _rankings_from_trajectory(
+    provider: BruteForceProvider,
+    queries: Sequence[str],
+    candidate_rankings: Sequence[Sequence[str]],
+) -> tuple[tuple[str, ...], ...]:
+    """Full per-turn ranking = the trajectory-ordered candidate window first,
+    then the raw-similarity corpus tail (ids not already in the window) for
+    recall coverage. With transition_weight=0 the window is emission-ordered, so
+    this reproduces the raw similarity ranking (pointwise parity)."""
+    rankings: list[tuple[str, ...]] = []
+    for query, candidate_ids in zip(queries, candidate_rankings, strict=True):
+        seen = set(candidate_ids)
+        tail = tuple(cid for cid in rank_full_corpus(provider, query) if cid not in seen)
+        rankings.append((*candidate_ids, *tail))
+    return tuple(rankings)
+
+
 def evaluate_method(
     *,
     conversations: Sequence[EvalConversation],
@@ -120,11 +147,14 @@ def evaluate_method(
     method: MethodSpec,
     config: MapMatchedMethodConfig,
     eval_config: EvalConfig,
-    graph_mode: str = "knn",
 ) -> MethodMetrics:
     passage_ids, passage_embeddings = build_passage_embeddings(passages, embedder)
     provider = BruteForceProvider(passage_ids, passage_embeddings, embedder)
-    graph = build_knn_graph(passage_ids, passage_embeddings)
+    graph_source = eval_config.graph_source
+    if graph_source == "section":
+        graph = build_section_graph(passages)
+    else:
+        graph = build_knn_graph(passage_ids, passage_embeddings)
 
     turn_metrics: list[TurnMetrics] = []
     entropies_for_threshold: list[float | None] = []
@@ -135,6 +165,7 @@ def evaluate_method(
             graph=graph,
             method=method,
             config=config,
+            ranking_mode=eval_config.ranking_mode,
         )
         entropies_for_threshold.extend(entropies)
         for turn, ranking, entropy in zip(conversation.turns, rankings, entropies, strict=True):
@@ -175,7 +206,7 @@ def evaluate_method(
         transition_weight=method.transition_weight,
         candidate_limit=config.candidate_limit,
         fixed_lag=method.fixed_lag if method.fixed_lag is not None else config.fixed_lag,
-        graph_mode=graph_mode,
+        graph_mode=graph_source,
         turns=classified_turns,
     )
 

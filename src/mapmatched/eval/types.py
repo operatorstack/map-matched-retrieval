@@ -10,6 +10,9 @@ SliceName = Literal["follow_up", "standalone", "all"]
 class Passage:
     passage_id: str
     text: str
+    # Optional structural grouping key (e.g. a Wikipedia article / section id).
+    # Passages sharing a group_key are adjacent in a SectionGraph. kNN ignores it.
+    group_key: str | None = None
 
     def __post_init__(self) -> None:
         if not self.passage_id:
@@ -89,6 +92,11 @@ class EvalConfig:
     entropy_threshold: float | None
     standalone_tolerance: float
     follow_up_min_delta: float
+    # "full" re-ranks the candidate window by trajectory score; "rank1" only
+    # hoists the decoded chunk to position 1 (the pre-fix behaviour).
+    ranking_mode: str = "full"
+    # "knn" (embedding fallback) or "section" (structured group_key graph).
+    graph_source: str = "knn"
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -99,6 +107,8 @@ class EvalConfig:
             "entropy_threshold": self.entropy_threshold,
             "standalone_tolerance": self.standalone_tolerance,
             "follow_up_min_delta": self.follow_up_min_delta,
+            "ranking_mode": self.ranking_mode,
+            "graph_source": self.graph_source,
         }
 
 

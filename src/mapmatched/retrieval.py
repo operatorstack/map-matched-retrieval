@@ -7,6 +7,7 @@ from typing import Protocol
 from .decoder import Decoder, StandaloneDecoder
 from .graph import CorpusGraph
 from .models import (
+    CandidateScore,
     DecodedPath,
     DecoderCandidate,
     RetrievalResult,
@@ -116,13 +117,25 @@ class MapMatchedSession:
         self._candidate_turns.append(limited_candidates)
         self._trellis.append(normalized_candidates)
         try:
-            path = self._retriever.decoder.decode(
-                self._trellis,
-                graph=self._retriever.graph,
-                emission_weight=self._retriever.emission_weight,
-                transition_weight=self._retriever.transition_weight,
-                fixed_lag=self._retriever.fixed_lag,
-            )
+            decoder = self._retriever.decoder
+            candidate_ranking: tuple[CandidateScore, ...] = ()
+            decode_ranked = getattr(decoder, "decode_ranked", None)
+            if callable(decode_ranked):
+                path, candidate_ranking = decode_ranked(
+                    self._trellis,
+                    graph=self._retriever.graph,
+                    emission_weight=self._retriever.emission_weight,
+                    transition_weight=self._retriever.transition_weight,
+                    fixed_lag=self._retriever.fixed_lag,
+                )
+            else:
+                path = decoder.decode(
+                    self._trellis,
+                    graph=self._retriever.graph,
+                    emission_weight=self._retriever.emission_weight,
+                    transition_weight=self._retriever.transition_weight,
+                    fixed_lag=self._retriever.fixed_lag,
+                )
             revised_indices = self._revised_indices(previous_path, path)
             if (
                 previous_trace is not None
@@ -146,6 +159,7 @@ class MapMatchedSession:
             candidates=limited_candidates,
             path=path,
             trace=trace,
+            candidate_ranking=candidate_ranking,
         )
 
     @staticmethod

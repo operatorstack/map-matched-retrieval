@@ -98,7 +98,10 @@ def load_topiocqa_micro(
                 text = gold_passage.get("text")
                 if isinstance(passage_id, str) and passage_id:
                     passage_text = _join_title_text(title, text)
-                    passages_by_id[passage_id] = Passage(passage_id, passage_text)
+                    group_key = title if isinstance(title, str) and title else None
+                    passages_by_id[passage_id] = Passage(
+                        passage_id, passage_text, group_key=group_key
+                    )
                     qrels[passage_id] = 3
             additional_answers = row.get("Additional_answers")
             if isinstance(additional_answers, list):
