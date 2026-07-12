@@ -4,9 +4,27 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+- Full-ranking eval: the decoder now exposes the current turn's candidates
+  ranked by trajectory (final-turn cumulative) score via `decode_ranked` and
+  `RetrievalResult.candidate_ranking` / `CandidateScore`. The eval re-ranks the
+  whole candidate window by that score (`--ranking-mode full`, default) instead
+  of only hoisting the decoded chunk to rank 1 (`--ranking-mode rank1`), so
+  nDCG@k reflects the trajectory across the top-k. With `transition_weight=0`
+  the re-rank reproduces the raw similarity order (pointwise parity).
+- Structured `SectionGraph`: `Passage.group_key` carries a structural key (the
+  TopiOCQA loader sets it to the Wikipedia article title); `build_section_graph`
+  connects same-key passages and clamps cross-group distance to
+  `maximum_distance` (a coherent-drill / expensive-jump prior). Selectable with
+  `--graph-source {knn,section}`.
+- `--candidate-limit` CLI flag (default 100) sizes the re-rankable window.
+- Add a numpy/sentence-transformers mypy override (numpy 2.5 stubs use 3.12
+  `type` syntax; the project's mypy targets 3.10).
 - Fix the TopiOCQA loader: read the released JSON/JSONL directly (HuggingFace
   `datasets` dropped the custom dataset script) via `data_path` / the
   `MAPMATCHED_TOPIOCQA_PATH` env var; drop the unused `datasets` dependency.
+- Eval slice fairness: one shared entropy threshold (from pointwise trace
+  entropies) and one provider/graph build per run so all methods are compared
+  on the same follow-up vs standalone slices.
 - Fix the TREC CAsT 2019 loader: use the correct ir-datasets id
   `trec-cast/v1/2019/judged`, load real passage text from the collection
   `docs_store()` (previously the doc id was used as the text), read

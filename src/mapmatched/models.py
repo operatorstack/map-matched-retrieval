@@ -22,6 +22,21 @@ class ScoredCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class CandidateScore:
+    """A current-turn candidate scored by the whole trajectory (best-first when
+    collected into a ranking). trajectory_score is the Viterbi cumulative score
+    of ending the decoded path at this candidate."""
+
+    chunk_id: str
+    trajectory_score: float
+
+    def __post_init__(self) -> None:
+        if not self.chunk_id:
+            raise ValueError("candidate score chunk_id must not be empty")
+        _require_finite("trajectory score", self.trajectory_score)
+
+
+@dataclass(frozen=True, slots=True)
 class DecoderCandidate:
     chunk_id: str
     raw_score: float
@@ -121,3 +136,6 @@ class RetrievalResult:
     candidates: tuple[ScoredCandidate, ...]
     path: DecodedPath
     trace: RetrievalTrace
+    # Current-turn candidates ranked by trajectory score (best-first). Empty when
+    # the decoder does not expose it (e.g. the optional CMG backend).
+    candidate_ranking: tuple[CandidateScore, ...] = ()

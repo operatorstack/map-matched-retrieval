@@ -74,3 +74,10 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["datasets", "datasets.*", "ir_datasets", "ir_datasets.*"]
 ignore_missing_imports = true
+
+# numpy's shipped stubs use Python 3.12 `type` statements, but mypy targets 3.10
+# here; skip analyzing them (numpy is an optional, lazily-imported dependency).
+[[tool.mypy.overrides]]
+module = ["numpy", "numpy.*", "sentence_transformers", "sentence_transformers.*"]
+follow_imports = "skip"
+ignore_missing_imports = true

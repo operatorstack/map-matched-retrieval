@@ -62,20 +62,40 @@ best map-matched configuration against the β=0 pointwise baseline:
 ### TopiOCQA (micro)
 
 ```console
-python -m mapmatched.eval --benchmark topiocqa --conversation-limit 50
+# download a split first (HF datasets dropped the custom dataset script):
+#   https://huggingface.co/datasets/McGill-NLP/TopiOCQA -> data/topiocqa_valid.jsonl
+python -m mapmatched.eval --benchmark topiocqa \
+    --data-path topiocqa_valid.jsonl --conversation-limit 25 \
+    --embedder sentence-transformers --graph-source section --ranking-mode full
 ```
 
-Loads the Hugging Face validation split and builds a micro-corpus from gold
-passages and additional answers.
+Reads the released JSON/JSONL directly (`--data-path` or `MAPMATCHED_TOPIOCQA_PATH`)
+and builds a micro-corpus from gold passages and additional answers. The section
+graph keys on the Wikipedia article title. Note TopiOCQA is topic-switch heavy,
+so it stresses the standalone (H0) side as much as the follow-up (H1) side.
 
 ### TREC CAsT 2019 (micro)
 
 ```console
-python -m mapmatched.eval --benchmark cast2019 --include-resolved-oracle
+python -m mapmatched.eval --benchmark cast2019 --embedder sentence-transformers
 ```
 
-Loads train topics and qrels via ir-datasets. Passage text defaults to doc IDs
-in micro mode; supply a real corpus mapping for full runs.
+Uses ir-datasets id `trec-cast/v1/2019/judged`. Real passage text comes from the
+collection `docs_store()` (MS MARCO + TREC CAR), which ir-datasets downloads on
+first use — **multi-GB**, so a full run is heavy and best done on a workstation.
+Without the collection the loader degrades to using doc ids as passage text
+(metrics not meaningful). CAsT's drill-down follow-ups are the fairer test for
+the follow-up-lift claim than TopiOCQA's topic switches.
+
+## Graph source and ranking mode
+
+- `--graph-source knn` (default) builds the embedding-kNN fallback graph;
+  `--graph-source section` builds a structured graph from `Passage.group_key`
+  (same key = adjacent; different key = clamped `maximum_distance`).
+- `--ranking-mode full` (default) re-ranks the candidate window by trajectory
+  score; `--ranking-mode rank1` reproduces the legacy decoded-chunk-first order.
+- `--candidate-limit` (default 100) sizes the re-rankable window; the gold
+  passage must be within it to be re-ranked (otherwise recall bounds the score).
 
 ## Reproducing headline numbers
 

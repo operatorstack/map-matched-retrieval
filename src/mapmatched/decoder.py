@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from .graph import CorpusGraph
-from .models import DecodedPath, DecodedStep, DecoderCandidate
+from .models import CandidateScore, DecodedPath, DecodedStep, DecoderCandidate
 
 Trellis = Sequence[Sequence[DecoderCandidate]]
 
@@ -61,22 +61,62 @@ class StandaloneDecoder:
         transition_weight: float,
         fixed_lag: int | None = None,
     ) -> DecodedPath:
+        path, _ = self.decode_ranked(
+            trellis,
+            graph=graph,
+            emission_weight=emission_weight,
+            transition_weight=transition_weight,
+            fixed_lag=fixed_lag,
+        )
+        return path
+
+    def decode_ranked(
+        self,
+        trellis: Trellis,
+        *,
+        graph: CorpusGraph,
+        emission_weight: float,
+        transition_weight: float,
+        fixed_lag: int | None = None,
+    ) -> tuple[DecodedPath, tuple[CandidateScore, ...]]:
+        """Decode the MAP path and, alongside it, rank the current turn's
+        candidates by trajectory (final-turn cumulative) score. One forward pass
+        for the full decode; fixed-lag adds one forward pass for the ranking."""
         _validate_decode(trellis, emission_weight, transition_weight, fixed_lag)
         if fixed_lag is None:
-            candidate_indices = self._decode_full(
+            cumulative_scores, backpointers = self._forward(
                 trellis, graph, emission_weight, transition_weight, {}
             )
+            final_index = self._best_index(cumulative_scores[-1])
+            candidate_indices = self._backtrack(backpointers, final_index)
+            final_scores = cumulative_scores[-1]
         else:
             candidate_indices = self._decode_fixed_lag(
                 trellis, graph, emission_weight, transition_weight, fixed_lag
             )
-        return self._build_path(
-            trellis,
-            candidate_indices,
-            graph,
-            emission_weight,
-            transition_weight,
+            cumulative_scores, _ = self._forward(
+                trellis, graph, emission_weight, transition_weight, {}
+            )
+            final_scores = cumulative_scores[-1]
+        path = self._build_path(
+            trellis, candidate_indices, graph, emission_weight, transition_weight
         )
+        ranking = self._rank_final_turn(trellis[-1], final_scores)
+        return path, ranking
+
+    @staticmethod
+    def _rank_final_turn(
+        final_candidates: Sequence[DecoderCandidate],
+        final_scores: Sequence[float],
+    ) -> tuple[CandidateScore, ...]:
+        scored = [
+            CandidateScore(chunk_id=candidate.chunk_id, trajectory_score=score)
+            for candidate, score in zip(final_candidates, final_scores, strict=True)
+            if math.isfinite(score)
+        ]
+        # best-first; deterministic tie-break by chunk id
+        scored.sort(key=lambda item: (-item.trajectory_score, item.chunk_id))
+        return tuple(scored)
 
     def _forward(
         self,

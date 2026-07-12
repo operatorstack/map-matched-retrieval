@@ -24,7 +24,7 @@ def run_mapmatched_conversation(
     provider: BruteForceProvider,
     queries: Sequence[str],
     config: MapMatchedMethodConfig,
-) -> tuple[tuple[str, ...], tuple[float | None, ...]]:
+) -> tuple[tuple[str, ...], tuple[float | None, ...], tuple[tuple[str, ...], ...]]:
     retriever = MapMatchedRetriever(
         graph,
         provider=provider,
@@ -37,11 +37,18 @@ def run_mapmatched_conversation(
     session = retriever.session()
     ranked_ids: list[str] = []
     entropies: list[float | None] = []
+    candidate_rankings: list[tuple[str, ...]] = []
     for query in queries:
         result = session.retrieve(query)
         ranked_ids.append(result.chunk_id)
         entropies.append(result.trace.steps[-1].emission_entropy)
-    return tuple(ranked_ids), tuple(entropies)
+        # current-turn candidates ranked by trajectory score; fall back to the
+        # decoded chunk when the decoder does not expose a ranking.
+        if result.candidate_ranking:
+            candidate_rankings.append(tuple(score.chunk_id for score in result.candidate_ranking))
+        else:
+            candidate_rankings.append((result.chunk_id,))
+    return tuple(ranked_ids), tuple(entropies), tuple(candidate_rankings)
 
 
 def run_pointwise_conversation(
@@ -50,7 +57,7 @@ def run_pointwise_conversation(
     provider: BruteForceProvider,
     queries: Sequence[str],
     config: MapMatchedMethodConfig,
-) -> tuple[tuple[str, ...], tuple[float | None, ...]]:
+) -> tuple[tuple[str, ...], tuple[float | None, ...], tuple[tuple[str, ...], ...]]:
     pointwise_config = MapMatchedMethodConfig(
         transition_weight=0.0,
         emission_weight=config.emission_weight,

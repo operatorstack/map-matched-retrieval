@@ -38,6 +38,24 @@ def build_parser() -> argparse.ArgumentParser:
         default="sentence-transformers/all-MiniLM-L6-v2",
         help="Model name when --embedder sentence-transformers.",
     )
+    parser.add_argument(
+        "--graph-source",
+        choices=("knn", "section"),
+        default="knn",
+        help="knn = embedding fallback graph; section = structured group_key graph.",
+    )
+    parser.add_argument(
+        "--ranking-mode",
+        choices=("full", "rank1"),
+        default="full",
+        help="full = re-rank the candidate window by trajectory score; rank1 = legacy hoist.",
+    )
+    parser.add_argument(
+        "--candidate-limit",
+        type=int,
+        default=100,
+        help="Per-turn candidate window fed to the decoder / re-rank.",
+    )
     parser.add_argument("--recall-k", type=int, default=100)
     parser.add_argument("--standalone-tolerance", type=float, default=0.02)
     parser.add_argument("--follow-up-min-delta", type=float, default=0.0)
@@ -85,12 +103,15 @@ def main(argv: list[str] | None = None) -> int:
         entropy_threshold=None,
         standalone_tolerance=args.standalone_tolerance,
         follow_up_min_delta=args.follow_up_min_delta,
+        ranking_mode=args.ranking_mode,
+        graph_source=args.graph_source,
     )
     report = run_ablation_grid(
         conversations=conversations,
         passages=passages,
         embedder=embedder,
         eval_config=eval_config,
+        candidate_limit=args.candidate_limit,
         include_resolved_oracle=args.include_resolved_oracle or args.benchmark == "cast2019",
     )
     args.output.write_text(render_json(report), encoding="utf-8")
