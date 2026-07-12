@@ -42,7 +42,8 @@ into a usable open-source library.
 
 ## 2. Naming
 
-- "MMR" collides with Maximal Marginal Relevance in IR — never use the acronym.
+- The common abbreviation for this project collides with Maximal Marginal
+  Relevance in IR, so always use the full map-matched retrieval name.
 - Repo/package: `map-matched-retrieval`; Python import: `mapmatched`.
 - GitHub org: `operatorstack` (alongside composable-model-graph / modelgraph).
 
@@ -183,8 +184,8 @@ Harness responsibilities:
   without harming the standalone slice beyond a preset tolerance).
 - Ablation runners: β sweep (incl. β=0, β→∞), graph-source arm, fixed-lag vs
   full Viterbi, M sweep.
-- Baselines: vanilla top-k, query-rewriting + dense retrieval, MMR
-  (maximal marginal relevance), optional GraphRAG-style graph-no-trajectory.
+- Baselines: vanilla top-k, query-rewriting + dense retrieval, Maximal Marginal
+  Relevance, optional GraphRAG-style graph-no-trajectory.
 - Report generation → the README headline numbers.
 
 Open gap (flagged, not blocking): the "citation graph" arm has no off-the-shelf
@@ -197,7 +198,10 @@ later scope.
 ## 4. Relationship to composable-model-graph
 
 CMG is the domain-independent substrate (control-theory concepts as graph
-primitives). This library maps cleanly onto its six concepts:
+primitives). As of main commit `62ec13b`, CMG already owns generic sequential
+estimation through `CandidateState`, `decode_path`, and
+`decode_path_fixed_lag`. This library maps retrieval concepts onto that
+substrate:
 
 | CMG concept | Here |
 | --- | --- |
@@ -206,15 +210,15 @@ primitives). This library maps cleanly onto its six concepts:
 | Graph | the trellis (and the corpus graph it scores against) |
 | Trace | the emission/transition split — literally our flagship artifact |
 | Evaluation | benchmark metrics, per-slice |
-| Feedback | λ/β adaptation from eval results |
+| Feedback | future λ/β adaptation from eval results |
 
-**Decision: build map-matched-retrieval standalone first** (Python, numpy core)
-for v0 velocity — researchers need `pip install`, not a framework. But design
-`core` so the trellis decoder lifts into CMG later as a domain-free
-`estimation` primitive (Viterbi / fixed-lag filtering are generic sequential
-state estimation — aerospace-native concepts CMG doesn't have yet). Per CMG's
-own development discipline, features are use-case-pulled: this library **is**
-the use case that pulls an `estimation` package into CMG (TS+Python parity, M4).
+**Decision: build map-matched-retrieval Python-first with its own backend
+boundary.** Mapmatched owns its decoder protocol and retrieval-specific models,
+and ships a dependency-free standalone decoder as the default. An optional CMG
+backend translates at the boundary for users with a compatible installation.
+CMG dataclasses are never part of mapmatched's public API. Until CMG has a
+stable tagged or PyPI release, mapmatched does not require an unstable Git
+dependency.
 
 ---
 
@@ -254,14 +258,15 @@ Python ≥3.10. Extras: `[faiss] [qdrant] [chroma] [pgvector] [langchain] [llama
 - **M1 — usable library**: session API, trace artifact (JSON + render),
   FAISS adapter, entropy computation, score-normalisation options, docs.
 - **M2 — proof of claim**: eval harness with TopiOCQA + CAsT, β ablations,
-  entropy-sliced H1/H0 report, baselines (β=0, query-rewrite, MMR).
+  entropy-sliced H1/H0 report, baselines (β=0, query-rewrite, Maximal Marginal
+  Relevance).
   Output: the README headline table. *This is the credibility milestone.*
 - **M3 — adoption**: LangChain/LlamaIndex two-way wrappers, Qdrant/Chroma/
   pgvector adapters, k-best paths, QReCC + BEIR runs, Wikipedia graph tooling,
   docs site.
-- **M4 — substrate**: extract trellis decoding into composable-model-graph as
-  a domain-free `estimation` primitive (TS+Python parity); wire λ/β tuning as
-  a CMG feedback loop. Optional: constructed citation-corpus eval.
+- **M4 — substrate integration**: adopt a stable composable-model-graph release
+  behind the existing decoder boundary; wire λ/β tuning as a CMG feedback loop.
+  Optional: constructed citation-corpus eval.
 
 ---
 
