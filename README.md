@@ -1,167 +1,280 @@
 # Map-Matched Retrieval
 
-Map-matched retrieval treats a multi-turn conversation as trajectory estimation.
-Each turn's retrieval candidates are states in a trellis, corpus-graph distance is
-the transition cost, and decoding returns the maximum-score path rather than an
-independent winner for every turn.
+[![CI](https://github.com/operatorstack/map-matched-retrieval/actions/workflows/ci.yml/badge.svg)](https://github.com/operatorstack/map-matched-retrieval/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Typed](https://img.shields.io/badge/typing-mypy_strict-blue)](https://mypy.readthedocs.io/)
+[![Status: Alpha](https://img.shields.io/badge/status-alpha-orange)](#project-status)
 
-It is a small retrieval decoder and trace library. It is not a vector store,
-embedder, agent framework, query rewriter, graph builder for large corpora, or
-context-ranking algorithm. In particular, the decoded MAP chunk and expanded
-context are separate outputs; context expansion does not imply multiple decoded
-paths.
+**Trajectory-aware retrieval for multi-turn conversations.**
+
+Most retrievers score every turn independently. Map-matched retrieval instead
+decodes the conversation as a path through a corpus graph: retrieval scores say
+where the conversation might be, while graph distance says how plausible each
+move is.
+
+The result is a small, retriever-agnostic Python library that sits between your
+candidate provider and your RAG pipeline. It returns both the selected chunks and
+an inspectable trace showing the emission/transition trade-off behind each
+decision.
+
+> [!IMPORTANT]
+> This project is an **alpha**. The dependency-free core, typed public API,
+> FAISS adapter, graph builders, traces, examples, and evaluation harness are
+> implemented and tested. Benchmark coverage and third-party adapters are still
+> being expanded, so APIs may evolve before 1.0.
+
+## Why trajectory decoding?
+
+| Pointwise retrieval | Map-matched retrieval |
+| --- | --- |
+| Chooses the highest-scoring chunk at each turn | Chooses the highest-scoring path across turns |
+| Discards conversational location | Carries location through a corpus graph |
+| Provides a score for the current result | Provides an emission/transition trace |
+| Can jump on an ambiguous follow-up | Penalizes implausible jumps while preserving strong evidence |
+
+For candidates \(x_t\) at turn \(t\), the decoder maximizes:
+
+```text
+Σ emission_weight × normalized_score(query_t, x_t)
+  − transition_weight × graph_distance(x_t−1, x_t)
+```
+
+Setting `transition_weight=0` exactly recovers deterministic pointwise retrieval.
+Full Viterbi decoding can revise earlier turns; fixed-lag decoding provides a
+bounded-revision streaming mode.
+
+## Highlights
+
+- Standard-library-only core with no runtime dependencies
+- Typed API checked with strict mypy
+- Full and fixed-lag Viterbi decoders
+- Bring-your-own retriever through a minimal `CandidateProvider` protocol
+- In-memory weighted graphs and embedding-derived kNN graphs
+- Optional FAISS adapter for cosine, inner-product, and L2 indexes
+- JSON and terminal traces with scores, graph costs, entropy, and revisions
+- Reproducible evaluation harness with ablations, baselines, and bootstrap CIs
+- CI across Python 3.10, 3.11, and 3.12
 
 ## Install
 
-Python 3.10 or newer is required.
+Python 3.10 or newer is required. The package is not yet published to PyPI;
+install the public alpha from source:
 
 ```console
-pip install map-matched-retrieval
+git clone https://github.com/operatorstack/map-matched-retrieval.git
+cd map-matched-retrieval
+python -m pip install -e .
 ```
 
-The core has no runtime dependencies. Install `map-matched-retrieval[graph]` to
-build a k-nearest-neighbor corpus graph from embeddings, or
-`map-matched-retrieval[faiss]` to add both graph construction and FAISS
-retrieval. Until composable-model-graph has a stable release, users who already
-have a compatible installation may explicitly choose `CMGDecoder`; mapmatched
-never installs or exposes its types.
+Optional extras keep the base package small:
 
-## Direct candidates
+```console
+python -m pip install -e ".[graph]"
+python -m pip install -e ".[faiss]"
+python -m pip install -e ".[eval,graph]"
+python -m pip install -e ".[st]"
+```
+
+| Extra | Adds |
+| --- | --- |
+| `graph` | Embedding-derived kNN graphs |
+| `faiss` | kNN graphs and the FAISS candidate provider |
+| `eval` | Benchmark loaders, baselines, metrics, and reports |
+| `st` | Sentence-transformer embeddings for evaluation |
+
+## Quickstart
+
+Supply scored candidates directly to see the decoder without a vector database:
 
 ```python
 from mapmatched import InMemoryCorpusGraph, MapMatchedRetriever, ScoredCandidate
 
 graph = InMemoryCorpusGraph.from_edges(
-    [("overview", "details"), ("details", "failure-modes")],
+    [("hmm", "noise"), ("noise", "road-jumps")],
     maximum_distance=4.0,
 )
 session = MapMatchedRetriever(
     graph,
-    transition_weight=0.7,
-    score_normalization="zscore",
+    score_normalization="none",
+    transition_weight=1.0,
 ).session()
 
-first = session.retrieve_candidates([
-    ScoredCandidate("overview", 0.82),
-    ScoredCandidate("failure-modes", 0.78),
-])
-second = session.retrieve_candidates([
-    ScoredCandidate("details", 0.63),
-    ScoredCandidate("failure-modes", 0.65),
-])
-
-print(second.chunk_id)
-print(second.context_chunk_ids)
-print(second.trace.to_json(indent=2))
-```
-
-For an existing retriever, implement `CandidateProvider.candidates(query, limit)`
-and pass it as `provider=...`; then call `session.retrieve(query)`.
-
-## FAISS session
-
-Mapmatched accepts caller-supplied embeddings but does not choose or download an
-embedding model:
-
-```python
-from mapmatched import FAISSProvider, KNNGraph, MapMatchedRetriever
-
-graph = KNNGraph.from_embeddings(
-    chunk_ids,
-    chunk_embeddings.tolist(),
-    neighbor_count=10,
+session.retrieve_candidates(
+    [
+        ScoredCandidate("hmm", 5.0),
+        ScoredCandidate("noise", 1.0),
+        ScoredCandidate("road-jumps", 0.0),
+    ]
 )
-provider = FAISSProvider(
-    faiss_index,
-    chunk_ids,
-    embed_query=my_embedding_function,
+result = session.retrieve_candidates(
+    [
+        ScoredCandidate("hmm", 1.0),
+        ScoredCandidate("noise", 3.0),
+        ScoredCandidate("road-jumps", 3.5),
+    ]
 )
-session = MapMatchedRetriever(
-    graph,
-    provider=provider,
-    transition_weight=0.5,
-).session()
-
-session.retrieve("How does token refresh work?")
-result = session.retrieve("What happens when it expires?")
 
 print(result.chunk_id)
 print(result.context_chunk_ids)
 print(result.trace.render())
 ```
 
-Use `score_mode="similarity"` for inner-product or cosine indexes. Use
-`score_mode="distance"` for L2 indexes so lower FAISS distances become higher
-retrieval scores. `FAISSProvider` verifies that index rows and chunk IDs stay
-aligned. Normalize indexed and query vectors before using an inner-product index
-as cosine search.
-
-`KNNGraph` normalizes embeddings and uses weighted cosine distance. Neighbor ties
-are resolved by chunk ID, identical vectors receive a small positive edge
-distance, and disconnected or over-cutoff paths still clamp to
-`maximum_distance`.
-
-## Behavior and choices
-
-- The objective is `emission_weight * normalized_score - transition_weight *
-  graph_distance`, accumulated over the path.
-- `zscore` is the safe normalization default. It makes each turn's score scale
-  comparable and maps a constant candidate set to zeros without division by zero.
-  `center` removes only the per-turn mean; `none` preserves the provider's scale
-  when scores are already calibrated. Raw and normalized scores remain in traces.
-- Entropy is computed from a numerically stable softmax of weighted normalized
-  emissions. The margin is the chosen normalized emission minus the best
-  alternative; it can be negative when graph coherence overrules pointwise rank.
-- `transition_weight=0` exactly reproduces deterministic per-turn argmax.
-  Candidate input order resolves score ties.
-- Full decoding can revise any prior turn when evidence arrives. Set
-  `fixed_lag=L` to commit a turn after `L` later turns. The trace reports both
-  revised indices and the committed boundary.
-- Context order is deterministic: current decoded chunk, graph neighbors ordered
-  by distance and ID, then current candidates in provider order, with stable
-  deduplication.
-
-## Suitable uses and limits
-
-This slice is intended for conversational documentation retrieval, linked
-knowledge bases, section graphs, and other corpora where local movement has
-meaning. Graph quality bounds retrieval quality. The in-memory graph uses bounded
-Dijkstra searches and a distance cache; unreachable and beyond-cutoff pairs clamp
-to `maximum_distance`. It is suitable for bounded candidate sets and modest
-graphs, not an all-pairs graph service.
-
-Candidate providers should return a small, high-recall set. Decoding costs
-`O(turns * candidates²)` graph lookups, reduced in practice by caching. A
-standalone query in a long session can be over-smoothed by prior context; start a
-new session for unrelated queries or reduce the transition weight. This library
-deliberately has no adaptive weighting, asynchronous API, or multiple-path
-decoding in the core package.
-
-## Evaluation (optional)
-
-Install the eval harness to run entropy-sliced benchmark reports:
-
-```console
-pip install map-matched-retrieval[eval,graph]
-python examples/05_eval_demo.py
+```text
+noise
+('noise', 'hmm', 'road-jumps')
 ```
 
-See [`docs/eval.md`](docs/eval.md) for TopiOCQA / TREC CAsT micro-corpus runs,
-ablation grids, and reproduction steps. The built-in hash embedder is for tests
-only; published numbers require a caller-supplied embedding model.
+The pointwise winner on the second turn is `road-jumps`, but the decoder selects
+the adjacent `noise` chunk because its slightly lower emission score is offset by
+a shorter graph move. The trace records the raw and normalized emissions, graph
+distance, weighted transition cost, entropy, cumulative score, and any revisions
+to prior turns.
 
-## Benchmark results (dev slice)
+Run the complete example:
 
-| Benchmark | Slice | Method | β | nDCG@3 | nDCG@5 | Recall | Δ vs β=0 |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| synthetic | follow_up | mapmatched | 0.50 | TBD | TBD | TBD | TBD |
-| synthetic | standalone | mapmatched | 0.50 | TBD | TBD | TBD | TBD |
-| topiocqa (micro) | follow_up | mapmatched | 0.50 | TBD | TBD | TBD | TBD |
-| cast2019 (micro) | follow_up | mapmatched | 0.50 | TBD | TBD | TBD | TBD |
+```console
+python examples/01_direct_candidates.py
+```
 
-Run `python -m mapmatched.eval --benchmark synthetic` to populate the synthetic
-row locally. Tier B rows require network access and a real embedder for
-publishable values.
+## Use an existing retriever
 
-See [`docs/theory.md`](docs/theory.md) for the objective and semantics and
-[`examples`](examples) for complete runs.
+Implement the two-argument candidate protocol and pass the provider into
+`MapMatchedRetriever`:
+
+```python
+from collections.abc import Sequence
+
+from mapmatched import MapMatchedRetriever, ScoredCandidate
+
+
+class MyCandidateProvider:
+    def candidates(self, query: str, limit: int) -> Sequence[ScoredCandidate]:
+        return my_retriever.search(query, limit=limit)
+
+
+session = MapMatchedRetriever(
+    corpus_graph,
+    provider=MyCandidateProvider(),
+    candidate_limit=20,
+    transition_weight=0.5,
+).session()
+
+session.retrieve("How does token refresh work?")
+result = session.retrieve("What happens when it expires?")
+```
+
+Providers return `ScoredCandidate` values with higher scores meaning better
+matches. See
+[`examples/02_custom_provider.py`](examples/02_custom_provider.py) for a complete
+adapter and [`examples/04_faiss_session.py`](examples/04_faiss_session.py) for
+FAISS with caller-supplied embeddings.
+
+## Architecture
+
+```text
+query ──> CandidateProvider ──> scored candidate trellis
+                                      │
+corpus structure ──> CorpusGraph ─────┤
+                                      ▼
+                              trajectory decoder
+                                      │
+                         ┌────────────┴────────────┐
+                         ▼                         ▼
+                  RetrievalResult           RetrievalTrace
+              chunk + ranked context   scores + costs + revisions
+```
+
+Mapmatched does not replace a vector store, choose an embedding model, rewrite
+queries, or run an agent framework. It owns one narrow boundary: graph-aware
+sequential decoding over candidate sets. The decoded MAP chunk and expanded
+context are separate outputs.
+
+## Evaluation
+
+The evaluation harness reports nDCG@3/5 and Recall@k separately for ambiguous
+follow-up turns and sharp standalone turns. It includes pointwise, history
+concatenation, Maximal Marginal Relevance, and resolved-query baselines, plus
+conversation-level percentile bootstrap confidence intervals.
+
+```console
+python -m mapmatched.eval \
+    --benchmark synthetic \
+    --bootstrap-samples 200
+```
+
+The synthetic benchmark is a deterministic smoke test, not research evidence.
+The current preliminary TopiOCQA micro-corpus result uses 25 conversations,
+MiniLM embeddings, a kNN graph, full candidate ranking, and no bootstrap CI:
+
+| Measurement | nDCG@3 |
+| --- | ---: |
+| Pointwise follow-up | 0.150 |
+| Map-matched follow-up | 0.234 |
+| Follow-up delta | +0.084 |
+| Standalone delta | +0.031 |
+
+These numbers demonstrate that the pipeline can produce measurable lift, but
+they are not a full-corpus or statistically conclusive benchmark. Structured
+section graphs also underperform on topic-switch-heavy TopiOCQA, an important
+negative result rather than a hidden one. See [`docs/eval.md`](docs/eval.md) for
+benchmark tiers, methodology, limitations, and reproduction commands.
+
+## Design choices and limits
+
+- Per-turn z-score normalization is the safe default; `center` and `none` are
+  available when provider scores already have a meaningful scale.
+- Candidate providers should return a small, high-recall set. Decoding requires
+  `O(turns × candidates²)` graph-distance lookups, reduced by distance caching.
+- Graph quality bounds retrieval quality. The in-memory graph uses bounded
+  Dijkstra search and clamps unreachable or over-cutoff distances.
+- A long session can over-smooth unrelated queries. Start a new session or lower
+  `transition_weight` when the topic changes.
+- The alpha does not yet provide adaptive weighting, an asynchronous API,
+  multiple-path decoding, or managed graph infrastructure.
+
+The strongest current use cases are conversational documentation retrieval,
+linked knowledge bases, section graphs, and other corpora where local movement
+has semantic meaning.
+
+## Project status
+
+- [x] Dependency-free decoder, graph protocol, and retrieval session
+- [x] Full and fixed-lag decoding with inspectable traces
+- [x] kNN graph builder and FAISS candidate provider
+- [x] Synthetic, TopiOCQA, and TREC CAsT evaluation paths
+- [x] Full candidate ranking and conversation-level bootstrap CIs
+- [ ] Lock reproducible full-corpus benchmark results
+- [ ] Add LangChain/LlamaIndex and hosted vector-store adapters
+- [ ] Add graph construction tooling for larger corpora
+- [ ] Stabilize the public API for a non-alpha release
+
+See [`PLAN.md`](PLAN.md) for the longer roadmap and [`CHANGELOG.md`](CHANGELOG.md)
+for the implementation history.
+
+## Documentation and examples
+
+- [`docs/theory.md`](docs/theory.md) — objective, normalization, graph distance,
+  and decoding semantics
+- [`docs/eval.md`](docs/eval.md) — benchmark tiers, baselines, and reproduction
+- [`examples/01_direct_candidates.py`](examples/01_direct_candidates.py) — core
+  decoder without external dependencies
+- [`examples/02_custom_provider.py`](examples/02_custom_provider.py) — custom
+  candidate provider
+- [`examples/03_cmg_inspectable_run.py`](examples/03_cmg_inspectable_run.py) —
+  optional composable-model-graph backend
+- [`examples/04_faiss_session.py`](examples/04_faiss_session.py) — FAISS and kNN
+  integration
+- [`examples/05_eval_demo.py`](examples/05_eval_demo.py) — offline synthetic eval
+
+## Development
+
+```console
+python -m pip install -e ".[dev,faiss,eval,graph]"
+python -m pytest
+python -m ruff check .
+python -m ruff format --check .
+python -m mypy
+```
+
+Issues and focused pull requests are welcome. For behavior changes, include tests
+and update the changelog so design decisions remain visible.

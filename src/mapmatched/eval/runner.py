@@ -6,6 +6,7 @@ from mapmatched import CorpusGraph
 
 from .baselines import MapMatchedMethodConfig, run_mapmatched_conversation
 from .baselines.methods import run_maximal_marginal_relevance_conversation
+from .bootstrap import bootstrap_slice_cis
 from .corpus import (
     BruteForceProvider,
     build_knn_graph,
@@ -164,7 +165,7 @@ def evaluate_method(
     entropy_threshold: float,
     graph_mode: str,
 ) -> MethodMetrics:
-    turn_metrics: list[TurnMetrics] = []
+    conversation_turns: list[list[TurnMetrics]] = []
     for conversation, trace_entropies_for_conversation in zip(
         conversations,
         trace_entropies,
@@ -178,6 +179,7 @@ def evaluate_method(
             config=config,
             ranking_mode=eval_config.ranking_mode,
         )
+        per_conversation: list[TurnMetrics] = []
         for turn, ranking, trace_entropy in zip(
             conversation.turns,
             rankings,
@@ -185,7 +187,7 @@ def evaluate_method(
             strict=True,
         ):
             relevances = turn_ranked_relevances(ranking, turn.qrels)
-            turn_metrics.append(
+            per_conversation.append(
                 TurnMetrics(
                     turn_index=turn.turn_index,
                     ndcg_at_3=ndcg_at_k(relevances, 3),
@@ -195,22 +197,39 @@ def evaluate_method(
                     slice_name="all",
                 )
             )
+        conversation_turns.append(per_conversation)
+
+    classified_conversation_turns: list[list[TurnMetrics]] = []
+    for per_conversation in conversation_turns:
+        classified_conversation_turns.append(
+            [
+                TurnMetrics(
+                    turn_index=turn.turn_index,
+                    ndcg_at_3=turn.ndcg_at_3,
+                    ndcg_at_5=turn.ndcg_at_5,
+                    recall_at_k=turn.recall_at_k,
+                    emission_entropy=turn.emission_entropy,
+                    slice_name=classify_turn_slice(
+                        turn_index=turn.turn_index,
+                        emission_entropy=turn.emission_entropy,
+                        entropy_threshold=entropy_threshold,
+                    ),
+                )
+                for turn in per_conversation
+            ]
+        )
 
     classified_turns = tuple(
-        TurnMetrics(
-            turn_index=turn.turn_index,
-            ndcg_at_3=turn.ndcg_at_3,
-            ndcg_at_5=turn.ndcg_at_5,
-            recall_at_k=turn.recall_at_k,
-            emission_entropy=turn.emission_entropy,
-            slice_name=classify_turn_slice(
-                turn_index=turn.turn_index,
-                emission_entropy=turn.emission_entropy,
-                entropy_threshold=entropy_threshold,
-            ),
-        )
-        for turn in turn_metrics
+        turn for conversation in classified_conversation_turns for turn in conversation
     )
+
+    ndcg_at_3_cis = None
+    if eval_config.bootstrap_samples > 0:
+        ndcg_at_3_cis = bootstrap_slice_cis(
+            classified_conversation_turns,
+            num_samples=eval_config.bootstrap_samples,
+            seed=eval_config.bootstrap_seed,
+        )
 
     effective_transition_weight: float | None
     if method.name == "pointwise":
@@ -231,6 +250,7 @@ def evaluate_method(
         fixed_lag=method.fixed_lag if method.fixed_lag is not None else config.fixed_lag,
         graph_mode=graph_mode,
         turns=classified_turns,
+        ndcg_at_3_cis=ndcg_at_3_cis,
     )
 
 

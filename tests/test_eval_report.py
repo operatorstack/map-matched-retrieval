@@ -34,3 +34,4 @@ def test_report_json_and_markdown_are_deterministic() -> None:
     markdown = render_markdown_table(report)
     assert '"benchmark": "synthetic"' in json_payload
     assert "| synthetic | follow_up | pointwise |" in markdown
+    assert "nDCG@3 95% CI" in markdown

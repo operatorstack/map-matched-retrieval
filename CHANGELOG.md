@@ -4,6 +4,9 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+- Bootstrap confidence intervals: conversation-level percentile bootstrap for
+  nDCG@3 per slice (`--bootstrap-samples`, default 0; use 1000 for publishable
+  runs). CIs appear in JSON reports and the markdown table.
 - Full-ranking eval: the decoder now exposes the current turn's candidates
   ranked by trajectory (final-turn cumulative) score via `decode_ranked` and
   `RetrievalResult.candidate_ranking` / `CandidateScore`. The eval re-ranks the

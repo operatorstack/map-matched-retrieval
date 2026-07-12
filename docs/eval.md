@@ -97,6 +97,21 @@ the follow-up-lift claim than TopiOCQA's topic switches.
 - `--candidate-limit` (default 100) sizes the re-rankable window; the gold
   passage must be within it to be re-ranked (otherwise recall bounds the score).
 
+## Bootstrap confidence intervals
+
+Use `--bootstrap-samples` to resample conversations and compute 95% percentile
+CIs for nDCG@3 on each slice. Disabled by default (`0`) for fast smoke runs;
+use `1000` for publishable numbers. `--bootstrap-seed` (default 42) keeps runs
+reproducible.
+
+```console
+python -m mapmatched.eval --benchmark synthetic \
+    --bootstrap-samples 200 --output eval-report.json
+```
+
+The markdown table adds an `nDCG@3 95% CI` column; JSON reports include
+`ndcg_at_3_ci` as `[lower, upper]` on each slice.
+
 ## Reproducing headline numbers
 
 The README headline table uses **Tier B dev-slice** results with a
