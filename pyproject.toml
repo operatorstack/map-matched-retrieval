@@ -31,6 +31,12 @@ faiss = [
   "numpy>=2.2.6; python_version < '3.11'",
   "numpy>=2.5.1; python_version >= '3.11'",
 ]
+eval = [
+  "datasets>=3.6",
+  "ir-datasets>=0.5.11",
+  "numpy>=2.2.6; python_version < '3.11'",
+  "numpy>=2.5.1; python_version >= '3.11'",
+]
 dev = [
   "build>=1.5.1",
   "mypy>=1.16",
@@ -61,4 +67,8 @@ warn_unreachable = true
 
 [[tool.mypy.overrides]]
 module = "composable_model_graph"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["datasets", "datasets.*", "ir_datasets", "ir_datasets.*"]
 ignore_missing_imports = true

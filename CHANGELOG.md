@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+- Add optional `mapmatched.eval` harness with TopiOCQA and TREC CAsT 2019 micro
+  loaders, entropy-sliced H1/H0 reporting, β ablations, and baselines (pointwise,
+  history concat, Maximal Marginal Relevance, resolved oracle).
+- Add deterministic hash embedder, synthetic CI fixtures, eval CLI, and
+  `examples/05_eval_demo.py`.
 - Add an optional FAISS candidate provider with injected query embeddings,
   explicit similarity/distance score handling, and index-to-chunk validation.
 - Add deterministic weighted cosine k-nearest-neighbor corpus graph construction

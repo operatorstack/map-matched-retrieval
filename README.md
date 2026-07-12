@@ -133,9 +133,35 @@ graphs, not an all-pairs graph service.
 Candidate providers should return a small, high-recall set. Decoding costs
 `O(turns * candidates²)` graph lookups, reduced in practice by caching. A
 standalone query in a long session can be over-smoothed by prior context; start a
-new session for unrelated queries or reduce the transition weight. This first
-usable library deliberately has no adaptive weighting, asynchronous API,
-additional vendor adapters, multiple-path decoding, or benchmark downloads.
+new session for unrelated queries or reduce the transition weight. This library
+deliberately has no adaptive weighting, asynchronous API, or multiple-path
+decoding in the core package.
+
+## Evaluation (optional)
+
+Install the eval harness to run entropy-sliced benchmark reports:
+
+```console
+pip install map-matched-retrieval[eval,graph]
+python examples/05_eval_demo.py
+```
+
+See [`docs/eval.md`](docs/eval.md) for TopiOCQA / TREC CAsT micro-corpus runs,
+ablation grids, and reproduction steps. The built-in hash embedder is for tests
+only; published numbers require a caller-supplied embedding model.
+
+## Benchmark results (dev slice)
+
+| Benchmark | Slice | Method | β | nDCG@3 | nDCG@5 | Recall | Δ vs β=0 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| synthetic | follow_up | mapmatched | 0.50 | TBD | TBD | TBD | TBD |
+| synthetic | standalone | mapmatched | 0.50 | TBD | TBD | TBD | TBD |
+| topiocqa (micro) | follow_up | mapmatched | 0.50 | TBD | TBD | TBD | TBD |
+| cast2019 (micro) | follow_up | mapmatched | 0.50 | TBD | TBD | TBD | TBD |
+
+Run `python -m mapmatched.eval --benchmark synthetic` to populate the synthetic
+row locally. Tier B rows require network access and a real embedder for
+publishable values.
 
 See [`docs/theory.md`](docs/theory.md) for the objective and semantics and
 [`examples`](examples) for complete runs.

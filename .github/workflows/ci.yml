@@ -73,3 +73,16 @@ jobs:
       - run: python -m pip install "composable-model-graph @ git+https://github.com/operatorstack/composable-model-graph.git@62ec13b#subdirectory=python"
       - run: python -m pytest tests/test_decoder.py -k optional_cmg
       - run: python examples/03_cmg_inspectable_run.py
+
+  eval-offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev,eval,graph]"
+      - run: python -m pytest tests/test_eval_*.py
+      - run: python examples/05_eval_demo.py

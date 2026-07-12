@@ -261,7 +261,7 @@ Python ≥3.10. Extras: `[faiss] [qdrant] [chroma] [pgvector] [langchain] [llama
   optional FAISS adapter, deterministic embedding-derived `KNNGraph`, entropy,
   score-normalisation options, CI, runnable examples, and docs. Embeddings remain
   caller-supplied; the base package remains dependency-free.
-- **M2 — proof of claim**: eval harness with TopiOCQA + CAsT, β ablations,
+- **M2 — proof of claim (complete)**: eval harness with TopiOCQA + CAsT, β ablations,
   entropy-sliced H1/H0 report, baselines (β=0, query-rewrite, Maximal Marginal
   Relevance).
   Output: the README headline table. *This is the credibility milestone.*
