@@ -27,8 +27,7 @@ def bootstrap_ndcg_at_3_ci(
     bootstrap_means: list[float] = []
     for _ in range(num_samples):
         resampled = [
-            conversation_turns[rng.randrange(conversation_count)]
-            for _ in range(conversation_count)
+            conversation_turns[rng.randrange(conversation_count)] for _ in range(conversation_count)
         ]
         selected_turns = [
             turn
