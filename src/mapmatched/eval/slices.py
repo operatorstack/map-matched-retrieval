@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from math import isclose
 
 from .metrics import mean
 from .types import ClaimVerdict, MethodMetrics, SliceMetrics, SliceName, TurnMetrics
@@ -132,10 +133,11 @@ def _select_method(
             method
             for method in matches
             if method.transition_weight is not None
-            and method.transition_weight == transition_weight
+            and isclose(method.transition_weight, transition_weight, rel_tol=1e-9, abs_tol=1e-12)
         ]
         if weighted:
             return weighted[0]
+        return None
     if not matches:
         return None
     return matches[0]
