@@ -41,6 +41,20 @@ same finite clamped distance. This makes jumps expensive but possible. Neighbor
 expansion uses the same bounded shortest distances and orders equal-distance
 neighbors by chunk ID.
 
+`KNNGraph` is the structure-free fallback. It normalizes each nonzero embedding,
+selects each chunk's nearest neighbors by cosine distance, and forms the
+undirected union of those selections. Equal-distance neighbors are ordered by
+chunk ID. Identical vectors receive `minimum_edge_distance` rather than a zero
+edge so shortest-path assumptions remain valid.
+
+## Candidate score direction
+
+The decoder always assumes higher candidate scores are better. Inner-product and
+normalized cosine FAISS indexes already follow that convention. L2 FAISS indexes
+return distances, so `FAISSProvider(score_mode="distance")` negates them at the
+adapter boundary. Query embedding remains caller-owned because choosing an
+embedding model is separate from trajectory decoding.
+
 ## Full and fixed-lag decoding
 
 Full Viterbi decoding reruns over the whole trellis after every turn. New evidence

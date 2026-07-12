@@ -22,7 +22,17 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
+graph = [
+  "numpy>=2.2.6; python_version < '3.11'",
+  "numpy>=2.5.1; python_version >= '3.11'",
+]
+faiss = [
+  "faiss-cpu>=1.14.3",
+  "numpy>=2.2.6; python_version < '3.11'",
+  "numpy>=2.5.1; python_version >= '3.11'",
+]
 dev = [
+  "build>=1.5.1",
   "mypy>=1.16",
   "pytest>=8.4",
   "ruff>=0.12",

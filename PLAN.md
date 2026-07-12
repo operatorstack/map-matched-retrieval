@@ -119,7 +119,7 @@ class CandidateProvider(Protocol):
 
 Adapters (each an optional dependency: `pip install map-matched-retrieval[faiss]`):
 
-- `FaissProvider`, `QdrantProvider`, `ChromaProvider`, `PgvectorProvider`
+- `FAISSProvider`, `QdrantProvider`, `ChromaProvider`, `PgvectorProvider`
 - `LangChainProvider(retriever)` / `LlamaIndexProvider(retriever)` — wrap theirs
 - …and the reverse: `as_langchain_retriever(session)` /
   `as_llamaindex_retriever(session)` so map-matched retrieval drops into an
@@ -130,25 +130,31 @@ Adapters (each an optional dependency: `pip install map-matched-retrieval[faiss]
 The user-facing API:
 
 ```python
-from mapmatched import MapMatchedRetriever, KNNGraph
-from mapmatched.adapters import FaissProvider
+from mapmatched import FAISSProvider, KNNGraph, MapMatchedRetriever
 
-graph = KNNGraph.from_embeddings(chunk_embeddings, k=10)
+graph = KNNGraph.from_embeddings(
+    chunk_ids,
+    chunk_embeddings.tolist(),
+    neighbor_count=10,
+)
 retriever = MapMatchedRetriever(
-    provider=FaissProvider(index, chunk_ids),
-    graph=graph,
-    lam=8.0, beta=0.5, top_m=20,
-    mode="viterbi",            # or mode="fixed_lag", lag=2
+    graph,
+    provider=FAISSProvider(index, chunk_ids, embed_query),
+    emission_weight=8.0,
+    transition_weight=0.5,
+    candidate_limit=20,
+    # fixed_lag=2,
 )
 
 session = retriever.session()
 r1 = session.retrieve("How does the HMM handle noisy GPS?")
 r2 = session.retrieve("what about when it jumps roads?")   # follow-up → prior disambiguates
 
-r2.chunk           # decoded x*_t
-r2.context(k=5)    # x*_t + graph neighbourhood + next-best emissions (for stuffing)
-r2.trace           # per-turn emission/transition split, entropy, drill-vs-jump
+r2.chunk_id           # decoded x*_t
+r2.context_chunk_ids  # decoded chunk + graph neighbourhood + current candidates
+r2.trace              # per-turn emission/transition split and entropy
 session.trace.to_json()
+session.trace.render()
 ```
 
 ### 3.5 Trace — `mapmatched.trace`
@@ -249,11 +255,12 @@ Python ≥3.10. Extras: `[faiss] [qdrant] [chroma] [pgvector] [langchain] [llama
 
 ## 6. Milestones
 
-- **M0 — proof of algorithm** (small): `core` decoders + `KNNGraph` +
-  example 01 (line-graph → leaky-integrator sanity check from the note) +
-  unit tests incl. degenerate modes. Standard library only.
-- **M1 — usable library**: session API, trace artifact (JSON + render),
-  FAISS adapter, entropy computation, score-normalisation options, docs.
+- **M0 — proof of algorithm (complete)**: dependency-free decoders, in-memory
+  corpus graph, line-graph sanity fixtures, degenerate modes, and unit tests.
+- **M1 — usable library (complete)**: session API, JSON and terminal traces,
+  optional FAISS adapter, deterministic embedding-derived `KNNGraph`, entropy,
+  score-normalisation options, CI, runnable examples, and docs. Embeddings remain
+  caller-supplied; the base package remains dependency-free.
 - **M2 — proof of claim**: eval harness with TopiOCQA + CAsT, β ablations,
   entropy-sliced H1/H0 report, baselines (β=0, query-rewrite, Maximal Marginal
   Relevance).
