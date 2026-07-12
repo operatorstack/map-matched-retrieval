@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+- Fix the TopiOCQA loader: read the released JSON/JSONL directly (HuggingFace
+  `datasets` dropped the custom dataset script) via `data_path` / the
+  `MAPMATCHED_TOPIOCQA_PATH` env var; drop the unused `datasets` dependency.
+- Fix the TREC CAsT 2019 loader: use the correct ir-datasets id
+  `trec-cast/v1/2019/judged`, load real passage text from the collection
+  `docs_store()` (previously the doc id was used as the text), read
+  `raw_utterance` / `manual_rewritten_utterance`, and populate resolved queries.
+- Add an optional `SentenceTransformerEmbedder` (extra: `[st]`) and an
+  `--embedder {hash,sentence-transformers}` CLI flag so eval runs can use real
+  semantic embeddings instead of the deterministic hash fixture. Both embedders
+  run locally — no API tokens.
 - Add optional `mapmatched.eval` harness with TopiOCQA and TREC CAsT 2019 micro
   loaders, entropy-sliced H1/H0 reporting, β ablations, and baselines (pointwise,
   history concat, Maximal Marginal Relevance, resolved oracle).

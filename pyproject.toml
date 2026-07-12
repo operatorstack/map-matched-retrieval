@@ -32,10 +32,12 @@ faiss = [
   "numpy>=2.5.1; python_version >= '3.11'",
 ]
 eval = [
-  "datasets>=3.6",
   "ir-datasets>=0.5.11",
   "numpy>=2.2.6; python_version < '3.11'",
   "numpy>=2.5.1; python_version >= '3.11'",
+]
+st = [
+  "sentence-transformers>=3.0",
 ]
 dev = [
   "build>=1.5.1",

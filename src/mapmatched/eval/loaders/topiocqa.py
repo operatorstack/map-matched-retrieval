@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-import importlib
-from types import ModuleType
+import json
+import os
+from collections.abc import Iterator
+from pathlib import Path
 
 from ..types import EvalConversation, EvalTurn, Passage
 
@@ -10,45 +12,79 @@ class EvalDependencyUnavailableError(ImportError):
     pass
 
 
-def _load_datasets() -> ModuleType:
-    try:
-        return importlib.import_module("datasets")
-    except ImportError as error:
+_PATH_ENV_VAR = "MAPMATCHED_TOPIOCQA_PATH"
+
+
+def _resolve_data_path(data_path: str | os.PathLike[str] | None) -> Path:
+    """Locate the TopiOCQA JSON/JSONL split.
+
+    HuggingFace `datasets` dropped support for the custom dataset *script* that
+    `McGill-NLP/TopiOCQA` ships, so we read the released JSON directly instead.
+    Point this at a downloaded split (e.g. ``topiocqa_dev.json``) via the
+    ``data_path`` argument or the ``MAPMATCHED_TOPIOCQA_PATH`` environment
+    variable.
+    """
+    candidate = data_path if data_path is not None else os.environ.get(_PATH_ENV_VAR)
+    if not candidate:
         raise EvalDependencyUnavailableError(
-            "TopiOCQA loader requires the 'eval' extra: pip install 'map-matched-retrieval[eval]'"
-        ) from error
+            "TopiOCQA loader needs the dataset JSON. Download a split (e.g. "
+            "topiocqa_dev.json) from https://github.com/McGill-NLP/topiocqa and "
+            f"pass data_path=... or set {_PATH_ENV_VAR}."
+        )
+    path = Path(candidate)
+    if not path.is_file():
+        raise EvalDependencyUnavailableError(f"TopiOCQA data file not found: {path}")
+    return path
+
+
+def _iter_rows(path: Path) -> Iterator[dict[str, object]]:
+    """Yield row dicts from either a JSON array file or a JSON-lines file."""
+    text = path.read_text(encoding="utf-8")
+    if text.lstrip().startswith("["):
+        payload = json.loads(text)
+        if not isinstance(payload, list):
+            raise EvalDependencyUnavailableError("TopiOCQA JSON must be a list of rows")
+        for row in payload:
+            if isinstance(row, dict):
+                yield row
+        return
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        row = json.loads(stripped)
+        if isinstance(row, dict):
+            yield row
 
 
 def load_topiocqa_micro(
     *,
     conversation_limit: int = 50,
+    data_path: str | os.PathLike[str] | None = None,
 ) -> tuple[tuple[EvalConversation, ...], tuple[Passage, ...]]:
     if conversation_limit <= 0:
         raise ValueError("conversation_limit must be greater than zero")
-    datasets = _load_datasets()
-    load_dataset = getattr(datasets, "load_dataset", None)
-    if not callable(load_dataset):
-        raise EvalDependencyUnavailableError("datasets.load_dataset is unavailable")
-    dataset = load_dataset("McGill-NLP/TopiOCQA", split="validation")
-    conversations: list[EvalConversation] = []
-    passages_by_id: dict[str, Passage] = {}
+    path = _resolve_data_path(data_path)
+
+    # Group rows by conversation, keeping the first `conversation_limit`
+    # conversations in file order (rows of an already-selected conversation are
+    # always collected, even when interleaved).
     grouped: dict[int, list[dict[str, object]]] = {}
-    for row in dataset:
-        if not isinstance(row, dict):
-            continue
+    selected_order: list[int] = []
+    for row in _iter_rows(path):
         conversation_number = row.get("Conversation_no")
         if not isinstance(conversation_number, int):
             continue
+        if conversation_number not in grouped:
+            if len(selected_order) >= conversation_limit:
+                continue
+            selected_order.append(conversation_number)
         grouped.setdefault(conversation_number, []).append(row)
-        if len(grouped) >= conversation_limit and conversation_number not in grouped:
-            break
 
-    selected_numbers = sorted(grouped.keys())[:conversation_limit]
-    for conversation_number in selected_numbers:
-        rows = sorted(
-            grouped[conversation_number],
-            key=lambda item: _turn_number(item),
-        )
+    conversations: list[EvalConversation] = []
+    passages_by_id: dict[str, Passage] = {}
+    for conversation_number in selected_order:
+        rows = sorted(grouped[conversation_number], key=_turn_number)
         turns: list[EvalTurn] = []
         for turn_index, row in enumerate(rows):
             question = row.get("Question")
