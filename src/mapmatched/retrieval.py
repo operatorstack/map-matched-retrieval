@@ -128,8 +128,7 @@ class MapMatchedSession:
                 previous_trace is not None
                 and previous_trace.committed_through_index is not None
                 and any(
-                    index <= previous_trace.committed_through_index
-                    for index in revised_indices
+                    index <= previous_trace.committed_through_index for index in revised_indices
                 )
             ):
                 raise RuntimeError("fixed-lag decoder revised a committed turn")
@@ -179,9 +178,7 @@ class MapMatchedSession:
                 if candidate.chunk_id != decoded_step.chunk_id
             ]
             normalized_margin = (
-                decoded_step.normalized_emission_score - max(alternatives)
-                if alternatives
-                else 0.0
+                decoded_step.normalized_emission_score - max(alternatives) if alternatives else 0.0
             )
             trace_steps.append(
                 TraceStep(

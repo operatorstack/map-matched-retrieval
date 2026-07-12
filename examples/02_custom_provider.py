@@ -14,9 +14,7 @@ class KeywordProvider:
             )
             for chunk_id, text in self._documents.items()
         ]
-        return sorted(scored, key=lambda candidate: (-candidate.score, candidate.chunk_id))[
-            :limit
-        ]
+        return sorted(scored, key=lambda candidate: (-candidate.score, candidate.chunk_id))[:limit]
 
 
 documents = {

@@ -70,9 +70,7 @@ def test_score_normalization_preserves_raw_scores(
 
 
 def test_zscore_constant_scores_is_safe() -> None:
-    normalized = normalize_candidates(
-        [ScoredCandidate("a", 7.0), ScoredCandidate("b", 7.0)]
-    )
+    normalized = normalize_candidates([ScoredCandidate("a", 7.0), ScoredCandidate("b", 7.0)])
 
     assert tuple(candidate.normalized_score for candidate in normalized) == (0.0, 0.0)
 

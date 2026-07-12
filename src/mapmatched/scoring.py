@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import math
-from typing import Literal, Sequence
+from collections.abc import Sequence
+from typing import Literal
 
 from .models import DecoderCandidate, ScoredCandidate
 
@@ -55,7 +56,5 @@ def softmax_entropy(scores: Sequence[float]) -> float:
     total = math.fsum(exponentials)
     probabilities = [value / total for value in exponentials]
     return -math.fsum(
-        probability * math.log(probability)
-        for probability in probabilities
-        if probability > 0.0
+        probability * math.log(probability) for probability in probabilities if probability > 0.0
     )

@@ -1,6 +1,5 @@
 from mapmatched import InMemoryCorpusGraph, MapMatchedRetriever, ScoredCandidate
 
-
 graph = InMemoryCorpusGraph.from_edges(
     [("hmm", "noise"), ("noise", "road-jumps")],
     maximum_distance=4.0,

@@ -81,9 +81,7 @@ def test_fixed_lag_exposes_commit_boundary_and_stabilizes_history() -> None:
         fixed_lag=0,
     ).session()
 
-    results = [
-        session.retrieve_candidates(candidates) for candidates in conversation_turns()
-    ]
+    results = [session.retrieve_candidates(candidates) for candidates in conversation_turns()]
 
     assert results[-1].trace.path_chunk_ids == ("0", "2", "0")
     assert results[-1].trace.revised_prior_indices == ()
@@ -99,9 +97,7 @@ def test_context_expansion_is_separate_ordered_and_deduplicated() -> None:
         context_radius=1.0,
     ).session()
 
-    result = session.retrieve_candidates(
-        [ScoredCandidate("0", 5.0), ScoredCandidate("2", 4.0)]
-    )
+    result = session.retrieve_candidates([ScoredCandidate("0", 5.0), ScoredCandidate("2", 4.0)])
 
     assert result.chunk_id == "0"
     assert result.context_chunk_ids == ("0", "1", "2")
@@ -114,12 +110,8 @@ def test_trace_contains_scores_cost_diagnostics_and_valid_json() -> None:
         score_normalization="none",
         transition_weight=2.0,
     ).session()
-    session.retrieve_candidates(
-        [ScoredCandidate("0", 2.0), ScoredCandidate("2", 1.0)]
-    )
-    result = session.retrieve_candidates(
-        [ScoredCandidate("1", 3.0), ScoredCandidate("2", 2.0)]
-    )
+    session.retrieve_candidates([ScoredCandidate("0", 2.0), ScoredCandidate("2", 1.0)])
+    result = session.retrieve_candidates([ScoredCandidate("1", 3.0), ScoredCandidate("2", 2.0)])
 
     payload = json.loads(result.trace.to_json())
     latest = payload["steps"][-1]

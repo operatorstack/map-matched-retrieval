@@ -166,10 +166,10 @@ class StandaloneDecoder:
             if final_turn_index >= fixed_lag:
                 commit_index = final_turn_index - fixed_lag
                 committed[commit_index] = prefix_path[commit_index]
-        full_path = self._decode_full(
-            trellis, graph, emission_weight, transition_weight, committed
-        )
-        return [committed.get(index, candidate_index) for index, candidate_index in enumerate(full_path)]
+        full_path = self._decode_full(trellis, graph, emission_weight, transition_weight, committed)
+        return [
+            committed.get(index, candidate_index) for index, candidate_index in enumerate(full_path)
+        ]
 
     @staticmethod
     def _build_path(

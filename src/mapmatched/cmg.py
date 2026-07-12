@@ -81,16 +81,12 @@ class CMGDecoder:
         steps: list[DecodedStep] = []
         cumulative_score = 0.0
         for turn_index, chunk_id in enumerate(state_ids):
-            candidates_by_id = {
-                candidate.chunk_id: candidate for candidate in trellis[turn_index]
-            }
+            candidates_by_id = {candidate.chunk_id: candidate for candidate in trellis[turn_index]}
             candidate = candidates_by_id.get(chunk_id)
             if candidate is None:
                 raise RuntimeError("CMG decoder returned an unknown state ID")
             graph_distance = (
-                0.0
-                if turn_index == 0
-                else graph.distance(state_ids[turn_index - 1], chunk_id)
+                0.0 if turn_index == 0 else graph.distance(state_ids[turn_index - 1], chunk_id)
             )
             weighted_emission_score = emission_weight * candidate.normalized_score
             weighted_transition_cost = transition_weight * graph_distance
