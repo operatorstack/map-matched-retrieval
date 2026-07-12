@@ -34,7 +34,7 @@ into a usable open-source library.
 
 - Small API. Theory informs design; it is never the price of admission.
 - Trace/evaluation-first: every decode is inspectable.
-- Core stays dependency-light (numpy only); everything vendor-specific is an
+- Core stays standard-library-only; everything vendor-specific is an
   optional adapter behind a protocol.
 - CHANGELOG.md as a reasoning trail, one entry per change.
 
@@ -51,9 +51,9 @@ into a usable open-source library.
 
 ## 3. Architecture (layers, inside → out)
 
-### 3.1 Core decoder — `mapmatched.core` (pure, numpy-only, no I/O)
+### 3.1 Core decoder — `mapmatched.core` (standard library only, no I/O)
 
-The algorithm from the note, as pure functions over arrays:
+The algorithm from the note, as typed operations over candidate sequences:
 
 - **Trellis**: per turn t, states `S_t` = top-M candidates with scores
   `s(q_t, c)`.
@@ -65,8 +65,6 @@ The algorithm from the note, as pure functions over arrays:
   - `fixed_lag(trellis, graph, lam, beta, lag=L)` — causal/streaming variant
     (forward filtering with an L-turn commit delay). On a line graph this
     reduces to a leaky integrator — the cheapest sanity build and first test.
-  - `k_best(...)` — list-Viterbi for top-k paths (RAG consumers want k chunks
-    for context stuffing, not just top-1).
 - **Degenerate modes are first-class flags** (they are the ablations):
   - `beta=0` → vanilla per-turn top-1 (the clean baseline).
   - `beta=inf` → graph geodesic, ignores evidence (over-smoothing bound).
@@ -151,7 +149,6 @@ r2.chunk           # decoded x*_t
 r2.context(k=5)    # x*_t + graph neighbourhood + next-best emissions (for stuffing)
 r2.trace           # per-turn emission/transition split, entropy, drill-vs-jump
 session.trace.to_json()
-session.trace.render()      # terminal + HTML rendering
 ```
 
 ### 3.5 Trace — `mapmatched.trace`
@@ -254,7 +251,7 @@ Python ≥3.10. Extras: `[faiss] [qdrant] [chroma] [pgvector] [langchain] [llama
 
 - **M0 — proof of algorithm** (small): `core` decoders + `KNNGraph` +
   example 01 (line-graph → leaky-integrator sanity check from the note) +
-  unit tests incl. degenerate modes. Pure numpy.
+  unit tests incl. degenerate modes. Standard library only.
 - **M1 — usable library**: session API, trace artifact (JSON + render),
   FAISS adapter, entropy computation, score-normalisation options, docs.
 - **M2 — proof of claim**: eval harness with TopiOCQA + CAsT, β ablations,
@@ -262,8 +259,7 @@ Python ≥3.10. Extras: `[faiss] [qdrant] [chroma] [pgvector] [langchain] [llama
   Relevance).
   Output: the README headline table. *This is the credibility milestone.*
 - **M3 — adoption**: LangChain/LlamaIndex two-way wrappers, Qdrant/Chroma/
-  pgvector adapters, k-best paths, QReCC + BEIR runs, Wikipedia graph tooling,
-  docs site.
+  pgvector adapters, QReCC + BEIR runs, Wikipedia graph tooling, docs site.
 - **M4 — substrate integration**: adopt a stable composable-model-graph release
   behind the existing decoder boundary; wire λ/β tuning as a CMG feedback loop.
   Optional: constructed citation-corpus eval.
