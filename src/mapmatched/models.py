@@ -108,6 +108,11 @@ class RetrievalTrace:
     def to_json(self, *, indent: int | None = None) -> str:
         return json.dumps(self.to_dict(), indent=indent, sort_keys=True, allow_nan=False)
 
+    def render(self) -> str:
+        from .trace import render_trace
+
+        return render_trace(self)
+
 
 @dataclass(frozen=True, slots=True)
 class RetrievalResult:

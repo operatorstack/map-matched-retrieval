@@ -1,6 +1,14 @@
+from .adapters import (
+    FAISSDependencyUnavailableError,
+    FAISSIndex,
+    FAISSProvider,
+    FAISSScoreMode,
+    QueryEmbedder,
+)
 from .cmg import CMGBackendUnavailableError, CMGDecoder
 from .decoder import Decoder, StandaloneDecoder
 from .graph import CorpusGraph, GraphEdge, InMemoryCorpusGraph
+from .knn import GraphDependencyUnavailableError, KNNGraph
 from .models import (
     DecodedPath,
     DecodedStep,
@@ -11,6 +19,7 @@ from .models import (
 )
 from .retrieval import CandidateProvider, MapMatchedRetriever, MapMatchedSession
 from .scoring import ScoreNormalization, normalize_candidates, softmax_entropy
+from .trace import render_trace
 
 __all__ = [
     "CMGBackendUnavailableError",
@@ -20,10 +29,17 @@ __all__ = [
     "DecodedPath",
     "DecodedStep",
     "Decoder",
+    "FAISSDependencyUnavailableError",
+    "FAISSIndex",
+    "FAISSProvider",
+    "FAISSScoreMode",
+    "GraphDependencyUnavailableError",
     "GraphEdge",
     "InMemoryCorpusGraph",
+    "KNNGraph",
     "MapMatchedRetriever",
     "MapMatchedSession",
+    "QueryEmbedder",
     "RetrievalResult",
     "RetrievalTrace",
     "ScoreNormalization",
@@ -31,6 +47,7 @@ __all__ = [
     "StandaloneDecoder",
     "TraceStep",
     "normalize_candidates",
+    "render_trace",
     "softmax_entropy",
 ]
 

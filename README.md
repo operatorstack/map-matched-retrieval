@@ -19,9 +19,12 @@ Python 3.10 or newer is required.
 pip install map-matched-retrieval
 ```
 
-The core has no runtime dependencies. Until composable-model-graph has a stable
-release, users who already have a compatible installation may explicitly choose
-`CMGDecoder`; mapmatched never installs or exposes its types.
+The core has no runtime dependencies. Install `map-matched-retrieval[graph]` to
+build a k-nearest-neighbor corpus graph from embeddings, or
+`map-matched-retrieval[faiss]` to add both graph construction and FAISS
+retrieval. Until composable-model-graph has a stable release, users who already
+have a compatible installation may explicitly choose `CMGDecoder`; mapmatched
+never installs or exposes its types.
 
 ## Direct candidates
 
@@ -54,6 +57,49 @@ print(second.trace.to_json(indent=2))
 
 For an existing retriever, implement `CandidateProvider.candidates(query, limit)`
 and pass it as `provider=...`; then call `session.retrieve(query)`.
+
+## FAISS session
+
+Mapmatched accepts caller-supplied embeddings but does not choose or download an
+embedding model:
+
+```python
+from mapmatched import FAISSProvider, KNNGraph, MapMatchedRetriever
+
+graph = KNNGraph.from_embeddings(
+    chunk_ids,
+    chunk_embeddings.tolist(),
+    neighbor_count=10,
+)
+provider = FAISSProvider(
+    faiss_index,
+    chunk_ids,
+    embed_query=my_embedding_function,
+)
+session = MapMatchedRetriever(
+    graph,
+    provider=provider,
+    transition_weight=0.5,
+).session()
+
+session.retrieve("How does token refresh work?")
+result = session.retrieve("What happens when it expires?")
+
+print(result.chunk_id)
+print(result.context_chunk_ids)
+print(result.trace.render())
+```
+
+Use `score_mode="similarity"` for inner-product or cosine indexes. Use
+`score_mode="distance"` for L2 indexes so lower FAISS distances become higher
+retrieval scores. `FAISSProvider` verifies that index rows and chunk IDs stay
+aligned. Normalize indexed and query vectors before using an inner-product index
+as cosine search.
+
+`KNNGraph` normalizes embeddings and uses weighted cosine distance. Neighbor ties
+are resolved by chunk ID, identical vectors receive a small positive edge
+distance, and disconnected or over-cutoff paths still clamp to
+`maximum_distance`.
 
 ## Behavior and choices
 
@@ -88,8 +134,8 @@ Candidate providers should return a small, high-recall set. Decoding costs
 `O(turns * candidates²)` graph lookups, reduced in practice by caching. A
 standalone query in a long session can be over-smoothed by prior context; start a
 new session for unrelated queries or reduce the transition weight. This first
-slice deliberately has no adaptive weighting, asynchronous API, vendor adapters,
-multiple-path decoding, or benchmark downloads.
+usable library deliberately has no adaptive weighting, asynchronous API,
+additional vendor adapters, multiple-path decoding, or benchmark downloads.
 
 See [`docs/theory.md`](docs/theory.md) for the objective and semantics and
 [`examples`](examples) for complete runs.
