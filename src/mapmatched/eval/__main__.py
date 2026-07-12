@@ -59,6 +59,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--recall-k", type=int, default=100)
     parser.add_argument("--standalone-tolerance", type=float, default=0.02)
     parser.add_argument("--follow-up-min-delta", type=float, default=0.0)
+    parser.add_argument(
+        "--bootstrap-samples",
+        type=int,
+        default=0,
+        help="Conversation-level bootstrap resamples for nDCG@3 95%% CIs (0 = disabled).",
+    )
+    parser.add_argument(
+        "--bootstrap-seed",
+        type=int,
+        default=42,
+        help="Random seed for bootstrap resampling.",
+    )
     parser.add_argument("--include-resolved-oracle", action="store_true")
     return parser
 
@@ -105,6 +117,8 @@ def main(argv: list[str] | None = None) -> int:
         follow_up_min_delta=args.follow_up_min_delta,
         ranking_mode=args.ranking_mode,
         graph_source=args.graph_source,
+        bootstrap_samples=args.bootstrap_samples,
+        bootstrap_seed=args.bootstrap_seed,
     )
     report = run_ablation_grid(
         conversations=conversations,

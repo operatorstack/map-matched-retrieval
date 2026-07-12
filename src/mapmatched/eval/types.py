@@ -70,6 +70,7 @@ class SliceMetrics:
     ndcg_at_3: float
     ndcg_at_5: float
     recall_at_k: float
+    ndcg_at_3_ci: tuple[float, float] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +98,8 @@ class EvalConfig:
     ranking_mode: str = "full"
     # "knn" (embedding fallback) or "section" (structured group_key graph).
     graph_source: str = "knn"
+    bootstrap_samples: int = 0
+    bootstrap_seed: int | None = 42
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -109,6 +112,8 @@ class EvalConfig:
             "follow_up_min_delta": self.follow_up_min_delta,
             "ranking_mode": self.ranking_mode,
             "graph_source": self.graph_source,
+            "bootstrap_samples": self.bootstrap_samples,
+            "bootstrap_seed": self.bootstrap_seed,
         }
 
 
@@ -144,6 +149,9 @@ class EvalReport:
                             "ndcg_at_3": slice_metrics.ndcg_at_3,
                             "ndcg_at_5": slice_metrics.ndcg_at_5,
                             "recall_at_k": slice_metrics.recall_at_k,
+                            "ndcg_at_3_ci": None
+                            if slice_metrics.ndcg_at_3_ci is None
+                            else list(slice_metrics.ndcg_at_3_ci),
                         }
                         for slice_metrics in method.slices
                     ],

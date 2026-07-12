@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from math import isclose
 
 from .metrics import mean
@@ -36,6 +36,8 @@ def classify_turn_slice(
 def aggregate_slice_metrics(
     turns: Sequence[TurnMetrics],
     slice_name: SliceName,
+    *,
+    ndcg_at_3_ci: tuple[float, float] | None = None,
 ) -> SliceMetrics:
     selected = [turn for turn in turns if turn.slice_name == slice_name]
     return SliceMetrics(
@@ -44,6 +46,7 @@ def aggregate_slice_metrics(
         ndcg_at_3=mean([turn.ndcg_at_3 for turn in selected]),
         ndcg_at_5=mean([turn.ndcg_at_5 for turn in selected]),
         recall_at_k=mean([turn.recall_at_k for turn in selected]),
+        ndcg_at_3_ci=ndcg_at_3_ci,
     )
 
 
@@ -55,17 +58,20 @@ def build_method_metrics(
     fixed_lag: int | None,
     graph_mode: str,
     turns: Sequence[TurnMetrics],
+    ndcg_at_3_cis: Mapping[SliceName, tuple[float, float] | None] | None = None,
 ) -> MethodMetrics:
+    cis = ndcg_at_3_cis or {}
     all_slice = SliceMetrics(
         slice_name="all",
         turn_count=len(turns),
         ndcg_at_3=mean([turn.ndcg_at_3 for turn in turns]),
         ndcg_at_5=mean([turn.ndcg_at_5 for turn in turns]),
         recall_at_k=mean([turn.recall_at_k for turn in turns]),
+        ndcg_at_3_ci=cis.get("all"),
     )
     slice_metrics = (
-        aggregate_slice_metrics(turns, "follow_up"),
-        aggregate_slice_metrics(turns, "standalone"),
+        aggregate_slice_metrics(turns, "follow_up", ndcg_at_3_ci=cis.get("follow_up")),
+        aggregate_slice_metrics(turns, "standalone", ndcg_at_3_ci=cis.get("standalone")),
         all_slice,
     )
     return MethodMetrics(

@@ -12,8 +12,8 @@ def render_markdown_table(report: EvalReport) -> str:
         f"Benchmark: `{report.config.benchmark}` · Tier: `{report.config.tier}` · "
         f"Embedder: `{report.config.embedder_name}`",
         "",
-        "| Benchmark | Slice | Method | β | nDCG@3 | nDCG@5 | Recall | Δ vs β=0 |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Benchmark | Slice | Method | β | nDCG@3 | nDCG@3 95% CI | nDCG@5 | Recall | Δ vs β=0 |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     baseline_by_slice = _baseline_ndcg(report.methods)
     for method in report.methods:
@@ -36,6 +36,7 @@ def render_markdown_table(report: EvalReport) -> str:
                         method.method_name,
                         beta,
                         f"{slice_metrics.ndcg_at_3:.3f}",
+                        _format_ci(slice_metrics.ndcg_at_3_ci),
                         f"{slice_metrics.ndcg_at_5:.3f}",
                         f"{slice_metrics.recall_at_k:.3f}",
                         delta,
@@ -86,3 +87,9 @@ def _format_delta(value: float, baseline: float | None) -> str:
     if baseline is None:
         return "—"
     return f"{value - baseline:+.3f}"
+
+
+def _format_ci(ci: tuple[float, float] | None) -> str:
+    if ci is None:
+        return "—"
+    return f"[{ci[0]:.3f}, {ci[1]:.3f}]"
