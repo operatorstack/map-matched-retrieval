@@ -13,22 +13,26 @@ from mapmatched.eval import (
 def main() -> None:
     conversations, passages = load_synthetic_fixture()
     embedder = DeterministicHashEmbedder()
-    report = run_ablation_grid(
-        conversations=conversations,
-        passages=passages,
-        embedder=embedder,
-        eval_config=EvalConfig(
-            benchmark="synthetic",
-            tier="synthetic",
-            embedder_name=embedder.name,
-            recall_k=10,
-            entropy_threshold=None,
-            standalone_tolerance=0.02,
-            follow_up_min_delta=0.0,
-        ),
-        transition_weights=(0.0, 0.5),
-        include_mmr=True,
-    )
+    try:
+        report = run_ablation_grid(
+            conversations=conversations,
+            passages=passages,
+            embedder=embedder,
+            eval_config=EvalConfig(
+                benchmark="synthetic",
+                tier="synthetic",
+                embedder_name=embedder.name,
+                recall_k=10,
+                entropy_threshold=None,
+                standalone_tolerance=0.02,
+                follow_up_min_delta=0.0,
+            ),
+            transition_weights=(0.0, 0.5),
+            include_mmr=True,
+        )
+    except ImportError:
+        print("Skipped: install the 'eval' and 'graph' extras to run this example")
+        return
     print(render_markdown_table(report))
 
 
