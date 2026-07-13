@@ -6,7 +6,7 @@ from mapmatched import CorpusGraph
 
 from .baselines import MapMatchedMethodConfig, run_mapmatched_conversation
 from .baselines.methods import run_maximal_marginal_relevance_conversation
-from .bootstrap import bootstrap_slice_cis
+from .bootstrap import bootstrap_paired_slice_delta_cis, bootstrap_slice_cis
 from .corpus import (
     BruteForceProvider,
     build_knn_graph,
@@ -21,7 +21,16 @@ from .slices import (
     compute_entropy_threshold,
     evaluate_claim,
 )
-from .types import EvalConfig, EvalConversation, EvalReport, MethodMetrics, Passage, TurnMetrics
+from .types import (
+    ComparisonSliceMetrics,
+    EvalConfig,
+    EvalConversation,
+    EvalReport,
+    MethodComparison,
+    MethodMetrics,
+    Passage,
+    TurnMetrics,
+)
 
 
 class MethodSpec:
@@ -143,13 +152,18 @@ def _build_provider_and_graph(
     embedder: TextEmbedder,
     *,
     graph_source: str,
+    knn_neighbor_count: int,
 ) -> tuple[BruteForceProvider, CorpusGraph]:
     passage_ids, passage_embeddings = build_passage_embeddings(passages, embedder)
     provider = BruteForceProvider(passage_ids, passage_embeddings, embedder)
     if graph_source == "section":
         graph = build_section_graph(passages)
     else:
-        graph = build_knn_graph(passage_ids, passage_embeddings)
+        graph = build_knn_graph(
+            passage_ids,
+            passage_embeddings,
+            neighbor_count=knn_neighbor_count,
+        )
     return provider, graph
 
 
@@ -189,6 +203,7 @@ def evaluate_method(
             relevances = turn_ranked_relevances(ranking, turn.qrels)
             per_conversation.append(
                 TurnMetrics(
+                    conversation_id=conversation.conversation_id,
                     turn_index=turn.turn_index,
                     ndcg_at_3=ndcg_at_k(relevances, 3),
                     ndcg_at_5=ndcg_at_k(relevances, 5),
@@ -204,6 +219,7 @@ def evaluate_method(
         classified_conversation_turns.append(
             [
                 TurnMetrics(
+                    conversation_id=turn.conversation_id,
                     turn_index=turn.turn_index,
                     ndcg_at_3=turn.ndcg_at_3,
                     ndcg_at_5=turn.ndcg_at_5,
@@ -268,6 +284,7 @@ def run_eval(
         passages,
         embedder,
         graph_source=graph_mode,
+        knn_neighbor_count=eval_config.knn_neighbor_count,
     )
     trace_method = MethodSpec(name="pointwise")
     trace_entropies = tuple(
@@ -301,6 +318,7 @@ def run_eval(
         )
         for method in methods
     )
+    comparisons = _build_method_comparisons(method_metrics, eval_config)
     mapmatched_methods = [method for method in methods if method.name == "mapmatched"]
     if not mapmatched_methods:
         verdict = None
@@ -321,4 +339,89 @@ def run_eval(
             follow_up_min_delta=eval_config.follow_up_min_delta,
             mapmatched_transition_weight=best_mapmatched.transition_weight,
         )
-    return EvalReport(config=eval_config, methods=method_metrics, verdict=verdict)
+    return EvalReport(
+        config=eval_config,
+        methods=method_metrics,
+        verdict=verdict,
+        comparisons=comparisons,
+    )
+
+
+def _build_method_comparisons(
+    methods: Sequence[MethodMetrics],
+    eval_config: EvalConfig,
+) -> tuple[MethodComparison, ...]:
+    comparisons: list[MethodComparison] = []
+    comparable_method_names = {
+        "history_concat",
+        "mapmatched",
+        "maximal_marginal_relevance",
+    }
+    for method in methods:
+        if method.method_name not in comparable_method_names:
+            continue
+        baseline = _find_pointwise_baseline(methods, method)
+        if baseline is None:
+            continue
+        delta_cis = bootstrap_paired_slice_delta_cis(
+            _group_turns_by_conversation(method),
+            _group_turns_by_conversation(baseline),
+            num_samples=eval_config.bootstrap_samples,
+            seed=eval_config.bootstrap_seed,
+        )
+        baseline_slices = {
+            slice_metrics.slice_name: slice_metrics for slice_metrics in baseline.slices
+        }
+        comparison_slices = tuple(
+            ComparisonSliceMetrics(
+                slice_name=slice_metrics.slice_name,
+                turn_count=slice_metrics.turn_count,
+                ndcg_at_3_delta=(
+                    slice_metrics.ndcg_at_3
+                    - baseline_slices[slice_metrics.slice_name].ndcg_at_3
+                ),
+                ndcg_at_3_delta_ci=delta_cis[slice_metrics.slice_name],
+            )
+            for slice_metrics in method.slices
+        )
+        comparisons.append(
+            MethodComparison(
+                method_name=method.method_name,
+                transition_weight=method.transition_weight,
+                baseline_method_name=baseline.method_name,
+                baseline_transition_weight=baseline.transition_weight,
+                candidate_limit=method.candidate_limit,
+                fixed_lag=method.fixed_lag,
+                graph_mode=method.graph_mode,
+                slices=comparison_slices,
+            )
+        )
+    return tuple(comparisons)
+
+
+def _find_pointwise_baseline(
+    methods: Sequence[MethodMetrics],
+    treatment: MethodMetrics,
+) -> MethodMetrics | None:
+    for method in methods:
+        if method.method_name != "pointwise":
+            continue
+        if method.transition_weight not in (0.0, None):
+            continue
+        if method.candidate_limit != treatment.candidate_limit:
+            continue
+        if method.fixed_lag != treatment.fixed_lag:
+            continue
+        if method.graph_mode != treatment.graph_mode:
+            continue
+        return method
+    return None
+
+
+def _group_turns_by_conversation(
+    method: MethodMetrics,
+) -> tuple[tuple[TurnMetrics, ...], ...]:
+    grouped: dict[str, list[TurnMetrics]] = {}
+    for turn in method.turns:
+        grouped.setdefault(turn.conversation_id, []).append(turn)
+    return tuple(tuple(turns) for turns in grouped.values())

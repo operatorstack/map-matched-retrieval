@@ -55,6 +55,7 @@ class EvalConversation:
 
 @dataclass(frozen=True, slots=True)
 class TurnMetrics:
+    conversation_id: str
     turn_index: int
     ndcg_at_3: float
     ndcg_at_5: float
@@ -85,6 +86,26 @@ class MethodMetrics:
 
 
 @dataclass(frozen=True, slots=True)
+class ComparisonSliceMetrics:
+    slice_name: SliceName
+    turn_count: int
+    ndcg_at_3_delta: float
+    ndcg_at_3_delta_ci: tuple[float, float] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MethodComparison:
+    method_name: str
+    transition_weight: float | None
+    baseline_method_name: str
+    baseline_transition_weight: float | None
+    candidate_limit: int
+    fixed_lag: int | None
+    graph_mode: str
+    slices: tuple[ComparisonSliceMetrics, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class EvalConfig:
     benchmark: str
     tier: str
@@ -98,8 +119,16 @@ class EvalConfig:
     ranking_mode: str = "full"
     # "knn" (embedding fallback) or "section" (structured group_key graph).
     graph_source: str = "knn"
+    knn_neighbor_count: int = 10
     bootstrap_samples: int = 0
     bootstrap_seed: int | None = 42
+    profile: str | None = None
+    dataset_filename: str | None = None
+    dataset_sha256: str | None = None
+    conversation_ids: tuple[str, ...] = ()
+    embedding_model: str | None = None
+    package_version: str | None = None
+    git_revision: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -112,8 +141,16 @@ class EvalConfig:
             "follow_up_min_delta": self.follow_up_min_delta,
             "ranking_mode": self.ranking_mode,
             "graph_source": self.graph_source,
+            "knn_neighbor_count": self.knn_neighbor_count,
             "bootstrap_samples": self.bootstrap_samples,
             "bootstrap_seed": self.bootstrap_seed,
+            "profile": self.profile,
+            "dataset_filename": self.dataset_filename,
+            "dataset_sha256": self.dataset_sha256,
+            "conversation_ids": list(self.conversation_ids),
+            "embedding_model": self.embedding_model,
+            "package_version": self.package_version,
+            "git_revision": self.git_revision,
         }
 
 
@@ -131,6 +168,7 @@ class EvalReport:
     config: EvalConfig
     methods: tuple[MethodMetrics, ...]
     verdict: ClaimVerdict | None
+    comparisons: tuple[MethodComparison, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -157,6 +195,7 @@ class EvalReport:
                     ],
                     "turns": [
                         {
+                            "conversation_id": turn.conversation_id,
                             "turn_index": turn.turn_index,
                             "ndcg_at_3": turn.ndcg_at_3,
                             "ndcg_at_5": turn.ndcg_at_5,
@@ -168,6 +207,29 @@ class EvalReport:
                     ],
                 }
                 for method in self.methods
+            ],
+            "comparisons": [
+                {
+                    "method_name": comparison.method_name,
+                    "transition_weight": comparison.transition_weight,
+                    "baseline_method_name": comparison.baseline_method_name,
+                    "baseline_transition_weight": comparison.baseline_transition_weight,
+                    "candidate_limit": comparison.candidate_limit,
+                    "fixed_lag": comparison.fixed_lag,
+                    "graph_mode": comparison.graph_mode,
+                    "slices": [
+                        {
+                            "slice_name": slice_metrics.slice_name,
+                            "turn_count": slice_metrics.turn_count,
+                            "ndcg_at_3_delta": slice_metrics.ndcg_at_3_delta,
+                            "ndcg_at_3_delta_ci": None
+                            if slice_metrics.ndcg_at_3_delta_ci is None
+                            else list(slice_metrics.ndcg_at_3_delta_ci),
+                        }
+                        for slice_metrics in comparison.slices
+                    ],
+                }
+                for comparison in self.comparisons
             ],
             "verdict": None
             if self.verdict is None
