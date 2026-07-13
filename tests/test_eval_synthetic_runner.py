@@ -41,9 +41,7 @@ def test_synthetic_eval_runs_end_to_end() -> None:
     assert "pointwise" in markdown
     assert report.comparisons
     mapmatched_comparison = next(
-        comparison
-        for comparison in report.comparisons
-        if comparison.method_name == "mapmatched"
+        comparison for comparison in report.comparisons if comparison.method_name == "mapmatched"
     )
     follow_up = next(
         slice_metrics

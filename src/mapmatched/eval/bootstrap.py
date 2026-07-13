@@ -132,9 +132,7 @@ def _contributing_conversations(
     conversation_turns: Sequence[Sequence[TurnMetrics]],
     slice_name: SliceName,
 ) -> tuple[Sequence[TurnMetrics], ...]:
-    return tuple(
-        turns for turns in conversation_turns if _selected_turns((turns,), slice_name)
-    )
+    return tuple(turns for turns in conversation_turns if _selected_turns((turns,), slice_name))
 
 
 def _selected_turns(
@@ -174,14 +172,10 @@ def _validate_alignment(
         raise ValueError("treatment and baseline conversation IDs do not match")
     for conversation_id, treatment_turns in treatment_by_id.items():
         baseline_turns = baseline_by_id[conversation_id]
-        treatment_keys = tuple(
-            (turn.turn_index, turn.slice_name) for turn in treatment_turns
-        )
+        treatment_keys = tuple((turn.turn_index, turn.slice_name) for turn in treatment_turns)
         baseline_keys = tuple((turn.turn_index, turn.slice_name) for turn in baseline_turns)
         if treatment_keys != baseline_keys:
-            raise ValueError(
-                f"treatment and baseline turns do not align for {conversation_id}"
-            )
+            raise ValueError(f"treatment and baseline turns do not align for {conversation_id}")
 
 
 def _percentile_interval(

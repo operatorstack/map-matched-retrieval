@@ -140,9 +140,7 @@ def main(argv: list[str] | None = None) -> int:
         profile=args.profile,
         dataset_filename=None if data_path is None else data_path.name,
         dataset_sha256=None if data_path is None else _sha256(data_path),
-        conversation_ids=tuple(
-            conversation.conversation_id for conversation in conversations
-        ),
+        conversation_ids=tuple(conversation.conversation_id for conversation in conversations),
         embedding_model=args.st_model
         if args.embedder == "sentence-transformers"
         else embedder.name,

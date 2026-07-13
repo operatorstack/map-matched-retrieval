@@ -57,9 +57,7 @@ def test_topiocqa_fixture_runs_end_to_end_offline() -> None:
             follow_up_min_delta=0.0,
             bootstrap_samples=20,
             bootstrap_seed=42,
-            conversation_ids=tuple(
-                conversation.conversation_id for conversation in conversations
-            ),
+            conversation_ids=tuple(conversation.conversation_id for conversation in conversations),
         ),
     )
     assert report.comparisons

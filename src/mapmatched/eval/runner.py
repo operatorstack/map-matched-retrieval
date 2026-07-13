@@ -377,8 +377,7 @@ def _build_method_comparisons(
                 slice_name=slice_metrics.slice_name,
                 turn_count=slice_metrics.turn_count,
                 ndcg_at_3_delta=(
-                    slice_metrics.ndcg_at_3
-                    - baseline_slices[slice_metrics.slice_name].ndcg_at_3
+                    slice_metrics.ndcg_at_3 - baseline_slices[slice_metrics.slice_name].ndcg_at_3
                 ),
                 ndcg_at_3_delta_ci=delta_cis[slice_metrics.slice_name],
             )
