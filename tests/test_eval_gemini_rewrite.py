@@ -42,7 +42,9 @@ def test_gemini_query_rewriter_sends_history_and_returns_text() -> None:
 
     assert rewritten == "standalone query"
     assert requests[0]["model"] == "test-model"
-    assert requests[0]["config"] == {"temperature": 0.0}
+    assert requests[0]["config"] == {
+        "thinking_config": {"thinking_level": "minimal"}
+    }
     assert '"prior_user_utterances": ["first question"]' in str(requests[0]["contents"])
 
 

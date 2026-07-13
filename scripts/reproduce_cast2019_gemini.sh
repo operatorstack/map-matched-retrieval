@@ -2,9 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROFILE="cast2019-gemini25flash-minilm-knn-full"
+PROFILE="cast2019-gemini35flash-minilm-knn-full"
 REPORT_DIR="${MAPMATCHED_REPORT_DIR:-$ROOT_DIR/reports/$PROFILE}"
-GEMINI_MODEL="${MAPMATCHED_GEMINI_MODEL:-gemini-2.5-flash}"
+GEMINI_MODEL="${MAPMATCHED_GEMINI_MODEL:-gemini-3.5-flash}"
 
 if [[ -z "${GEMINI_API_KEY:-}" ]]; then
   echo "GEMINI_API_KEY must be set" >&2

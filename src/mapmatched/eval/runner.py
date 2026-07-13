@@ -111,8 +111,7 @@ def run_method_on_conversation(
             raise ValueError("gemini_rewrite requires a conversation query rewriter")
         rewritten_queries = rewrite_conversation_queries(conversation, query_rewriter)
         return tuple(
-            rank_full_corpus(provider, rewritten_query)
-            for rewritten_query in rewritten_queries
+            rank_full_corpus(provider, rewritten_query) for rewritten_query in rewritten_queries
         ), tuple(None for _ in queries)
     if method.name == "resolved_oracle":
         oracle_queries = tuple(

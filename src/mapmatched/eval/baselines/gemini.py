@@ -5,8 +5,9 @@ import json
 import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import Literal
 
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
 GEMINI_REWRITE_PROMPT_VERSION = "cast-standalone-v1"
 
 _SYSTEM_INSTRUCTION = """\
@@ -23,7 +24,7 @@ class GeminiDependencyUnavailableError(ImportError):
 @dataclass(frozen=True, slots=True)
 class GeminiRewriteConfig:
     model: str = DEFAULT_GEMINI_MODEL
-    temperature: float = 0.0
+    thinking_level: Literal["minimal", "low", "medium", "high"] = "minimal"
 
 
 class GeminiQueryRewriter:
@@ -32,7 +33,9 @@ class GeminiQueryRewriter:
         *,
         generate_content: Callable[..., object],
         config: GeminiRewriteConfig,
+        client: object | None = None,
     ) -> None:
+        self._client = client
         self._generate_content = generate_content
         self.config = config
 
@@ -41,10 +44,13 @@ class GeminiQueryRewriter:
             "prior_user_utterances": list(history),
             "current_utterance": query,
         }
+        prompt = (
+            f"{_SYSTEM_INSTRUCTION}\n\nConversation:\n{json.dumps(request, ensure_ascii=False)}"
+        )
         response = self._generate_content(
             model=self.config.model,
-            contents=f"{_SYSTEM_INSTRUCTION}\n\nConversation:\n{json.dumps(request, ensure_ascii=False)}",
-            config={"temperature": self.config.temperature},
+            contents=prompt,
+            config={"thinking_config": {"thinking_level": self.config.thinking_level}},
         )
         response_text = getattr(response, "text", None)
         if not isinstance(response_text, str) or not response_text.strip():
@@ -59,9 +65,7 @@ def create_gemini_query_rewriter(
 ) -> GeminiQueryRewriter:
     effective_api_key = api_key if api_key is not None else os.environ.get("GEMINI_API_KEY")
     if not effective_api_key:
-        raise ValueError(
-            "GEMINI_API_KEY must be set when the Gemini rewrite baseline is enabled"
-        )
+        raise ValueError("GEMINI_API_KEY must be set when the Gemini rewrite baseline is enabled")
     try:
         genai = importlib.import_module("google.genai")
     except ImportError as error:
@@ -82,4 +86,5 @@ def create_gemini_query_rewriter(
     return GeminiQueryRewriter(
         generate_content=generate_content,
         config=GeminiRewriteConfig(model=model),
+        client=client,
     )

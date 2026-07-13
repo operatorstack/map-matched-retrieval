@@ -116,14 +116,13 @@ Without the collection the loader degrades to using doc ids as passage text
 the follow-up-lift claim than TopiOCQA's topic switches.
 
 The script adds `gemini_rewrite` to the normal ablation grid. It sends each raw
-utterance and its prior user utterances to `gemini-2.5-flash` with temperature
-zero, retrieves with the returned standalone query, and compares it with both
+utterance and its prior user utterances to `gemini-3.5-flash` with minimal
+thinking, retrieves with the returned standalone query, and compares it with both
 pointwise retrieval and CAsT's manual `resolved_oracle`. `GEMINI_API_KEY` is read
 from the environment and is never written to reports. Reports record the Gemini
 model and prompt version. The baseline is opt-in because it makes one paid,
 networked model request per selected turn; `--conversation-limit` bounds those
-requests. Temperature zero does not make hosted-model output immutable across
-model revisions.
+requests. Hosted-model output is not immutable across model revisions.
 
 ## Graph source and ranking mode
 
