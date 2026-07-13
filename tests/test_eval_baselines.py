@@ -30,6 +30,25 @@ def test_brute_force_provider_caches_query_embeddings() -> None:
     assert embedder.query_count == 1
 
 
+def test_brute_force_provider_vectorized_ranking_is_deterministic() -> None:
+    class FixedEmbedder:
+        def embed_query(self, query: str) -> tuple[float, float]:
+            del query
+            return 1.0, 0.0
+
+    provider = BruteForceProvider(
+        ("second", "first", "middle"),
+        ((0.0, 1.0), (1.0, 0.0), (0.5, 0.5)),
+        FixedEmbedder(),
+    )
+
+    assert tuple(candidate.chunk_id for candidate in provider.candidates("query", limit=3)) == (
+        "first",
+        "middle",
+        "second",
+    )
+
+
 def test_history_concat_changes_query_sequence() -> None:
     _, passages = load_synthetic_fixture()
     embedder = DeterministicHashEmbedder()
