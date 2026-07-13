@@ -4,6 +4,9 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+- Add an opt-in Gemini conversational query rewrite baseline for TREC CAsT,
+  configured by `GEMINI_API_KEY`, with paired pointwise comparisons and
+  model/prompt provenance in evaluation reports.
 - Add paired conversation-level bootstrap intervals for method nDCG@3 deltas,
   preserve conversation IDs in reports, and fix the aggregate `all`-slice
   bootstrap interval.

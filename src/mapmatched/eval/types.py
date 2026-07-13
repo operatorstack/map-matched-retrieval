@@ -129,6 +129,9 @@ class EvalConfig:
     embedding_model: str | None = None
     package_version: str | None = None
     git_revision: str | None = None
+    query_rewrite_provider: str | None = None
+    query_rewrite_model: str | None = None
+    query_rewrite_prompt_version: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -151,6 +154,9 @@ class EvalConfig:
             "embedding_model": self.embedding_model,
             "package_version": self.package_version,
             "git_revision": self.git_revision,
+            "query_rewrite_provider": self.query_rewrite_provider,
+            "query_rewrite_model": self.query_rewrite_model,
+            "query_rewrite_prompt_version": self.query_rewrite_prompt_version,
         }
 
 

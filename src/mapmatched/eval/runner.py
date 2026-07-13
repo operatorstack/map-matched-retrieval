@@ -4,7 +4,12 @@ from collections.abc import Sequence
 
 from mapmatched import CorpusGraph
 
-from .baselines import MapMatchedMethodConfig, run_mapmatched_conversation
+from .baselines import (
+    ConversationQueryRewriter,
+    MapMatchedMethodConfig,
+    rewrite_conversation_queries,
+    run_mapmatched_conversation,
+)
 from .baselines.methods import run_maximal_marginal_relevance_conversation
 from .bootstrap import bootstrap_paired_slice_delta_cis, bootstrap_slice_cis
 from .corpus import (
@@ -61,6 +66,7 @@ def run_method_on_conversation(
     method: MethodSpec,
     config: MapMatchedMethodConfig,
     ranking_mode: str = "full",
+    query_rewriter: ConversationQueryRewriter | None = None,
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[float | None, ...]]:
     queries = [turn.query for turn in conversation.turns]
     method_config = MapMatchedMethodConfig(
@@ -100,6 +106,14 @@ def run_method_on_conversation(
             rankings.append(rank_full_corpus(provider, rewritten))
             history.append(query)
         return tuple(rankings), tuple(None for _ in queries)
+    if method.name == "gemini_rewrite":
+        if query_rewriter is None:
+            raise ValueError("gemini_rewrite requires a conversation query rewriter")
+        rewritten_queries = rewrite_conversation_queries(conversation, query_rewriter)
+        return tuple(
+            rank_full_corpus(provider, rewritten_query)
+            for rewritten_query in rewritten_queries
+        ), tuple(None for _ in queries)
     if method.name == "resolved_oracle":
         oracle_queries = tuple(
             turn.resolved_query if turn.resolved_query is not None else turn.query
@@ -178,6 +192,7 @@ def evaluate_method(
     trace_entropies: Sequence[Sequence[float | None]],
     entropy_threshold: float,
     graph_mode: str,
+    query_rewriter: ConversationQueryRewriter | None = None,
 ) -> MethodMetrics:
     conversation_turns: list[list[TurnMetrics]] = []
     for conversation, trace_entropies_for_conversation in zip(
@@ -192,6 +207,7 @@ def evaluate_method(
             method=method,
             config=config,
             ranking_mode=eval_config.ranking_mode,
+            query_rewriter=query_rewriter,
         )
         per_conversation: list[TurnMetrics] = []
         for turn, ranking, trace_entropy in zip(
@@ -278,6 +294,7 @@ def run_eval(
     methods: Sequence[MethodSpec],
     config: MapMatchedMethodConfig,
     eval_config: EvalConfig,
+    query_rewriter: ConversationQueryRewriter | None = None,
 ) -> EvalReport:
     graph_mode = eval_config.graph_source
     provider, graph = _build_provider_and_graph(
@@ -315,6 +332,7 @@ def run_eval(
             trace_entropies=trace_entropies,
             entropy_threshold=entropy_threshold,
             graph_mode=graph_mode,
+            query_rewriter=query_rewriter,
         )
         for method in methods
     )
@@ -353,6 +371,7 @@ def _build_method_comparisons(
 ) -> tuple[MethodComparison, ...]:
     comparisons: list[MethodComparison] = []
     comparable_method_names = {
+        "gemini_rewrite",
         "history_concat",
         "mapmatched",
         "maximal_marginal_relevance",

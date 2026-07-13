@@ -80,6 +80,7 @@ python -m pip install -e ".[st]"
 | `graph` | Embedding-derived kNN graphs |
 | `faiss` | kNN graphs and the FAISS candidate provider |
 | `eval` | Benchmark loaders, baselines, metrics, and reports |
+| `gemini` | Gemini conversational query rewrite baseline |
 | `st` | Sentence-transformer embeddings for evaluation |
 
 ## Quickstart
@@ -193,9 +194,9 @@ context are separate outputs.
 
 The evaluation harness reports nDCG@3/5 and Recall@k separately for ambiguous
 follow-up turns and sharp standalone turns. It includes pointwise, history
-concatenation, Maximal Marginal Relevance, and resolved-query baselines, plus
-conversation-level percentile bootstrap confidence intervals. Method deltas use
-paired resampling of the same conversations.
+concatenation, optional Gemini query rewriting, Maximal Marginal Relevance, and
+resolved-query baselines, plus conversation-level percentile bootstrap confidence
+intervals. Method deltas use paired resampling of the same conversations.
 
 ```console
 python -m mapmatched.eval \

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from .baselines import MapMatchedMethodConfig
+from .baselines import ConversationQueryRewriter, MapMatchedMethodConfig
 from .embedder import TextEmbedder
 from .runner import MethodSpec, run_eval
 from .types import EvalConfig, EvalConversation, EvalReport, Passage
@@ -11,6 +11,7 @@ from .types import EvalConfig, EvalConversation, EvalReport, Passage
 def default_method_grid(
     *,
     transition_weights: Sequence[float] = (0.0, 0.5, 1.0),
+    include_gemini_rewrite: bool = False,
     include_mmr: bool = True,
     include_resolved_oracle: bool = False,
 ) -> tuple[MethodSpec, ...]:
@@ -22,6 +23,8 @@ def default_method_grid(
             continue
         methods.append(MethodSpec(name="mapmatched", transition_weight=beta))
     methods.append(MethodSpec(name="history_concat"))
+    if include_gemini_rewrite:
+        methods.append(MethodSpec(name="gemini_rewrite"))
     if include_mmr:
         methods.append(MethodSpec(name="maximal_marginal_relevance"))
     if include_resolved_oracle:
@@ -38,11 +41,14 @@ def run_ablation_grid(
     transition_weights: Sequence[float] = (0.0, 0.5, 1.0),
     candidate_limit: int = 20,
     fixed_lag: int | None = None,
+    include_gemini_rewrite: bool = False,
     include_mmr: bool = True,
     include_resolved_oracle: bool = False,
+    query_rewriter: ConversationQueryRewriter | None = None,
 ) -> EvalReport:
     methods = default_method_grid(
         transition_weights=transition_weights,
+        include_gemini_rewrite=include_gemini_rewrite,
         include_mmr=include_mmr,
         include_resolved_oracle=include_resolved_oracle,
     )
@@ -57,4 +63,5 @@ def run_ablation_grid(
         methods=methods,
         config=config,
         eval_config=eval_config,
+        query_rewriter=query_rewriter,
     )

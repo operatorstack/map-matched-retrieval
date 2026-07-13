@@ -13,7 +13,8 @@ python -m pip install -e ".[eval,graph,st]"
 
 The harness uses NumPy for kNN graph construction and optional Hugging Face /
 ir-datasets loaders for benchmark metadata. It does **not** download embedding
-models.
+models. Install `.[eval,graph,st,gemini]` only when running the Gemini rewrite
+baseline.
 
 ## Tiers
 
@@ -55,6 +56,7 @@ best map-matched configuration against the β=0 pointwise baseline:
 | `pointwise` | `transition_weight=0` — independent per-turn top-1 |
 | `mapmatched` | Full trajectory decoder with configurable β |
 | `history_concat` | Dense retrieval over concatenated query history |
+| `gemini_rewrite` | Gemini rewrites each turn into a standalone query before dense retrieval |
 | `maximal_marginal_relevance` | Per-turn MMR re-ranking (not map-matched retrieval) |
 | `resolved_oracle` | CAsT resolved utterances (upper bound) |
 
@@ -101,7 +103,9 @@ they do not establish full-corpus or cross-benchmark generalization.
 ### TREC CAsT 2019 (micro)
 
 ```console
-python -m mapmatched.eval --benchmark cast2019 --embedder sentence-transformers
+export GEMINI_API_KEY="..."
+python -m pip install -e ".[eval,graph,st,gemini]"
+./scripts/reproduce_cast2019_gemini.sh
 ```
 
 Uses ir-datasets id `trec-cast/v1/2019/judged`. Real passage text comes from the
@@ -110,6 +114,16 @@ first use — **multi-GB**, so a full run is heavy and best done on a workstatio
 Without the collection the loader degrades to using doc ids as passage text
 (metrics not meaningful). CAsT's drill-down follow-ups are the fairer test for
 the follow-up-lift claim than TopiOCQA's topic switches.
+
+The script adds `gemini_rewrite` to the normal ablation grid. It sends each raw
+utterance and its prior user utterances to `gemini-2.5-flash` with temperature
+zero, retrieves with the returned standalone query, and compares it with both
+pointwise retrieval and CAsT's manual `resolved_oracle`. `GEMINI_API_KEY` is read
+from the environment and is never written to reports. Reports record the Gemini
+model and prompt version. The baseline is opt-in because it makes one paid,
+networked model request per selected turn; `--conversation-limit` bounds those
+requests. Temperature zero does not make hosted-model output immutable across
+model revisions.
 
 ## Graph source and ranking mode
 
