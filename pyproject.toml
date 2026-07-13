@@ -24,6 +24,7 @@ dependencies = []
 [project.optional-dependencies]
 graph = [
   "numpy>=2.2.6",
+  "scipy>=1.15.3",
 ]
 faiss = [
   "faiss-cpu>=1.14.3",

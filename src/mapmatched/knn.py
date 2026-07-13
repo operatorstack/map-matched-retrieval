@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import importlib
 import math
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from types import ModuleType
 
 from .graph import GraphEdge, InMemoryCorpusGraph
@@ -21,6 +21,16 @@ def _load_numpy() -> ModuleType:
         raise GraphDependencyUnavailableError(
             "KNNGraph requires the 'graph' extra: pip install 'map-matched-retrieval[graph]'"
         ) from error
+
+
+def _load_scipy_sparse() -> tuple[ModuleType, ModuleType] | None:
+    try:
+        return (
+            importlib.import_module("scipy.sparse"),
+            importlib.import_module("scipy.sparse.csgraph"),
+        )
+    except ImportError:
+        return None
 
 
 def _coerce_embedding_rows(
@@ -59,6 +69,76 @@ def _coerce_embedding_rows(
 
 
 class KNNGraph(InMemoryCorpusGraph):
+    def __init__(
+        self,
+        edges: Iterable[GraphEdge] = (),
+        *,
+        nodes: Iterable[str] = (),
+        directed: bool = False,
+        maximum_distance: float = 10.0,
+        distance_cache_size: int = 256,
+    ) -> None:
+        super().__init__(
+            edges,
+            nodes=nodes,
+            directed=directed,
+            maximum_distance=maximum_distance,
+            distance_cache_size=distance_cache_size,
+        )
+        self._ordered_nodes = tuple(sorted(self._adjacency))
+        self._node_indices = {chunk_id: index for index, chunk_id in enumerate(self._ordered_nodes)}
+        scipy_sparse = _load_scipy_sparse()
+        if scipy_sparse is None:
+            self._sparse_adjacency = None
+            self._scipy_csgraph = None
+            return
+        sparse, self._scipy_csgraph = scipy_sparse
+        rows: list[int] = []
+        columns: list[int] = []
+        distances: list[float] = []
+        for source_id, neighbors in self._adjacency.items():
+            source_index = self._node_indices[source_id]
+            for target_id, distance in neighbors.items():
+                rows.append(source_index)
+                columns.append(self._node_indices[target_id])
+                distances.append(distance)
+        csr_matrix = getattr(sparse, "csr_matrix", None)
+        if not callable(csr_matrix):
+            self._sparse_adjacency = None
+            self._scipy_csgraph = None
+            return
+        self._sparse_adjacency = csr_matrix(
+            (distances, (rows, columns)),
+            shape=(len(self._ordered_nodes), len(self._ordered_nodes)),
+        )
+
+    def _bounded_distances(self, source: str, cutoff: float) -> dict[str, float]:
+        if self._sparse_adjacency is None or self._scipy_csgraph is None:
+            return super()._bounded_distances(source, cutoff)
+        source_index = self._node_indices.get(source)
+        if source_index is None:
+            return {source: 0.0}
+        dijkstra = getattr(self._scipy_csgraph, "dijkstra", None)
+        if not callable(dijkstra):
+            return super()._bounded_distances(source, cutoff)
+        raw_distances = dijkstra(
+            self._sparse_adjacency,
+            directed=self._directed,
+            indices=source_index,
+            limit=cutoff,
+        )
+        tolist = getattr(raw_distances, "tolist", None)
+        if not callable(tolist):
+            return super()._bounded_distances(source, cutoff)
+        values = tolist()
+        if not isinstance(values, list):
+            return super()._bounded_distances(source, cutoff)
+        return {
+            chunk_id: float(distance)
+            for chunk_id, distance in zip(self._ordered_nodes, values, strict=True)
+            if isinstance(distance, (int, float)) and math.isfinite(distance) and distance <= cutoff
+        }
+
     @classmethod
     def from_embeddings(
         cls,

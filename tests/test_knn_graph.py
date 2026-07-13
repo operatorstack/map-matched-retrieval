@@ -71,6 +71,30 @@ def test_knn_graph_connects_neighbors_across_similarity_blocks() -> None:
     assert graph.distance("chunk-255", "chunk-256") < graph.maximum_distance
 
 
+def test_sparse_and_standard_library_shortest_paths_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    chunk_ids = ["a", "b", "c", "d"]
+    embeddings = [[1.0, 0.0], [0.9, 0.1], [0.1, 0.9], [0.0, 1.0]]
+    accelerated = KNNGraph.from_embeddings(
+        chunk_ids,
+        embeddings,
+        neighbor_count=1,
+    )
+    monkeypatch.setattr(knn_module, "_load_scipy_sparse", lambda: None)
+    standard_library = KNNGraph.from_embeddings(
+        chunk_ids,
+        embeddings,
+        neighbor_count=1,
+    )
+
+    for source in chunk_ids:
+        for target in chunk_ids:
+            assert accelerated.distance(source, target) == pytest.approx(
+                standard_library.distance(source, target)
+            )
+
+
 @pytest.mark.parametrize(
     ("chunk_ids", "embeddings", "message"),
     [
