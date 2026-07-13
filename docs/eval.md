@@ -83,6 +83,21 @@ follow-up side. It is licensed
 dataset is not redistributed by this repository. These runs are micro-corpus
 experiments, not full-Wikipedia retrieval.
 
+The pinned run at git revision `60a9d694b807c3eb49da2a00743c6f1a05d52e6d`
+produced byte-identical reports twice:
+
+| Slice | Method | nDCG@3 | Delta vs pointwise | Paired delta 95% CI |
+| --- | --- | ---: | ---: | ---: |
+| Follow-up | Map-matched β=0.5 | 0.195 | +0.045 | [+0.018, +0.077] |
+| Follow-up | Map-matched β=1.0 | 0.234 | +0.084 | [+0.046, +0.128] |
+| Follow-up | MMR | 0.151 | +0.001 | [+0.000, +0.003] |
+| Standalone | Map-matched β=1.0 | 0.373 | +0.031 | [+0.009, +0.055] |
+
+The complete aggregate table and provenance are committed in
+[`results/topiocqa_n25_minilm_knn.md`](../results/topiocqa_n25_minilm_knn.md).
+Positive intervals support the claim on this fixed 25-conversation micro-corpus;
+they do not establish full-corpus or cross-benchmark generalization.
+
 ### TREC CAsT 2019 (micro)
 
 ```console
