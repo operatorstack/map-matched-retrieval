@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import math
+from collections import OrderedDict
 from collections.abc import Iterable, Sequence
 from types import ModuleType
 
@@ -87,6 +88,7 @@ class KNNGraph(InMemoryCorpusGraph):
         )
         self._ordered_nodes = tuple(sorted(self._adjacency))
         self._node_indices = {chunk_id: index for index, chunk_id in enumerate(self._ordered_nodes)}
+        self._sparse_distance_cache: OrderedDict[str, object] = OrderedDict()
         scipy_sparse = _load_scipy_sparse()
         if scipy_sparse is None:
             self._sparse_adjacency = None
@@ -112,21 +114,70 @@ class KNNGraph(InMemoryCorpusGraph):
             shape=(len(self._ordered_nodes), len(self._ordered_nodes)),
         )
 
-    def _bounded_distances(self, source: str, cutoff: float) -> dict[str, float]:
+    def distance(self, source_chunk_id: str, target_chunk_id: str) -> float:
         if self._sparse_adjacency is None or self._scipy_csgraph is None:
-            return super()._bounded_distances(source, cutoff)
+            return super().distance(source_chunk_id, target_chunk_id)
+        if not source_chunk_id or not target_chunk_id:
+            raise ValueError("distance chunk IDs must not be empty")
+        if source_chunk_id == target_chunk_id:
+            return 0.0
+        target_index = self._node_indices.get(target_chunk_id)
+        if target_index is None:
+            return self._maximum_distance
+        distances = self._cached_sparse_distances(source_chunk_id)
+        if distances is not None:
+            return self._sparse_distance_value(distances, target_index)
+        if not self._directed:
+            reverse_distances = self._cached_sparse_distances(target_chunk_id)
+            source_index = self._node_indices.get(source_chunk_id)
+            if reverse_distances is not None and source_index is not None:
+                return self._sparse_distance_value(reverse_distances, source_index)
+        distances = self._compute_sparse_distances(source_chunk_id, self._maximum_distance)
+        if distances is None:
+            return self._maximum_distance
+        self._sparse_distance_cache[source_chunk_id] = distances
+        self._sparse_distance_cache.move_to_end(source_chunk_id)
+        if len(self._sparse_distance_cache) > self._distance_cache_size:
+            self._sparse_distance_cache.popitem(last=False)
+        return self._sparse_distance_value(distances, target_index)
+
+    def _cached_sparse_distances(self, source: str) -> object | None:
+        distances = self._sparse_distance_cache.get(source)
+        if distances is not None:
+            self._sparse_distance_cache.move_to_end(source)
+        return distances
+
+    def _sparse_distance_value(self, distances: object, target_index: int) -> float:
+        get_item = getattr(distances, "__getitem__", None)
+        if not callable(get_item):
+            return self._maximum_distance
+        distance = float(get_item(target_index))
+        if not math.isfinite(distance):
+            return self._maximum_distance
+        return min(distance, self._maximum_distance)
+
+    def _compute_sparse_distances(self, source: str, cutoff: float) -> object | None:
+        if self._sparse_adjacency is None or self._scipy_csgraph is None:
+            return None
         source_index = self._node_indices.get(source)
         if source_index is None:
-            return {source: 0.0}
+            return None
         dijkstra = getattr(self._scipy_csgraph, "dijkstra", None)
         if not callable(dijkstra):
-            return super()._bounded_distances(source, cutoff)
-        raw_distances = dijkstra(
+            return None
+        return dijkstra(
             self._sparse_adjacency,
             directed=self._directed,
             indices=source_index,
             limit=cutoff,
         )
+
+    def _bounded_distances(self, source: str, cutoff: float) -> dict[str, float]:
+        if self._sparse_adjacency is None or self._scipy_csgraph is None:
+            return super()._bounded_distances(source, cutoff)
+        raw_distances = self._compute_sparse_distances(source, cutoff)
+        if raw_distances is None:
+            return {source: 0.0}
         tolist = getattr(raw_distances, "tolist", None)
         if not callable(tolist):
             return super()._bounded_distances(source, cutoff)

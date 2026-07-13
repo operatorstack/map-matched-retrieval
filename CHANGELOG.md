@@ -23,7 +23,8 @@ All notable changes to this project are documented here.
   `transition_weight=0`, preventing pointwise evaluation from materializing an
   all-pairs distance cache.
 - Accelerate `KNNGraph` shortest paths with SciPy's compiled sparse-graph
-  implementation when available while retaining the standard-library fallback.
+  implementation and compact dense-distance cache when available while
+  retaining the standard-library fallback.
 - Vectorize evaluation retrieval scores with NumPy and retain a bounded query
   score cache, removing per-dimension Python loops from full-corpus baselines.
 - Publish the reproducible TopiOCQA n=25 MiniLM/kNN micro-corpus result:
