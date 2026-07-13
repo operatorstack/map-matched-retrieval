@@ -9,6 +9,8 @@ All notable changes to this project are documented here.
   bootstrap interval.
 - Add a pinned TopiOCQA n=25 MiniLM/kNN reproduction script with dataset
   checksum, selected conversation IDs, model, graph, package, and git provenance.
+- Cache repeated query embeddings in the eval provider and reuse one bounded
+  shortest-path search across all targets for a graph source.
 - Bootstrap confidence intervals: conversation-level percentile bootstrap for
   nDCG@3 per slice (`--bootstrap-samples`, default 0; use 1000 for publishable
   runs). CIs appear in JSON reports and the markdown table.

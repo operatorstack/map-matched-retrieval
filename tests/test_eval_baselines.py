@@ -9,6 +9,27 @@ from mapmatched.eval.embedder import DeterministicHashEmbedder
 from mapmatched.eval.loaders.synthetic import load_synthetic_fixture
 
 
+def test_brute_force_provider_caches_query_embeddings() -> None:
+    class CountingEmbedder:
+        def __init__(self) -> None:
+            self.query_count = 0
+
+        def embed_query(self, query: str) -> tuple[float, float]:
+            del query
+            self.query_count += 1
+            return (1.0, 0.0)
+
+    embedder = CountingEmbedder()
+    provider = BruteForceProvider(
+        ("first", "second"),
+        ((1.0, 0.0), (0.0, 1.0)),
+        embedder,
+    )
+    provider.candidates("same query", limit=2)
+    provider.candidates("same query", limit=1)
+    assert embedder.query_count == 1
+
+
 def test_history_concat_changes_query_sequence() -> None:
     _, passages = load_synthetic_fixture()
     embedder = DeterministicHashEmbedder()

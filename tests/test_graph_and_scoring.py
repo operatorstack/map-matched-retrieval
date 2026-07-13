@@ -45,6 +45,28 @@ def test_directed_graph_and_shortest_path_cutoff() -> None:
     assert graph.distance("a", "c") == 1.5
 
 
+def test_distance_reuses_single_source_shortest_paths() -> None:
+    class CountingGraph(InMemoryCorpusGraph):
+        def __init__(self) -> None:
+            super().__init__(
+                [
+                    GraphEdge("a", "b", 1.0),
+                    GraphEdge("b", "c", 1.0),
+                ]
+            )
+            self.search_count = 0
+
+        def _bounded_distances(self, source: str, cutoff: float) -> dict[str, float]:
+            self.search_count += 1
+            return super()._bounded_distances(source, cutoff)
+
+    graph = CountingGraph()
+    assert graph.distance("a", "b") == 1.0
+    assert graph.distance("a", "c") == 2.0
+    assert graph.distance("c", "a") == 2.0
+    assert graph.search_count == 1
+
+
 @pytest.mark.parametrize(
     ("method", "expected"),
     [
