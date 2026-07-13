@@ -7,7 +7,6 @@ from mapmatched.eval.__main__ import main
 from mapmatched.eval.baselines import MapMatchedMethodConfig
 from mapmatched.eval.loaders import load_topiocqa_micro
 
-
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "topiocqa_micro_sample.jsonl"
 
 

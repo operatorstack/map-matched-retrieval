@@ -30,8 +30,9 @@ def render_markdown_table(report: EvalReport) -> str:
         )
     lines.extend(
         [
-            "| Benchmark | Slice | Method | β | nDCG@3 | nDCG@3 95% CI | nDCG@5 | Recall | Δ vs β=0 (95% CI) |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            "| Benchmark | Slice | Method | β | nDCG@3 | nDCG@3 95% CI | "
+            "nDCG@5 | Recall | Δ vs β=0 (95% CI) |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
     )
     baseline_by_slice = _baseline_ndcg(report.methods)
