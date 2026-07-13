@@ -7,6 +7,8 @@ from types import ModuleType
 
 from .graph import GraphEdge, InMemoryCorpusGraph
 
+_SIMILARITY_BLOCK_SIZE = 256
+
 
 class GraphDependencyUnavailableError(ImportError):
     pass
@@ -88,50 +90,53 @@ class KNNGraph(InMemoryCorpusGraph):
                 "and no greater than maximum_distance"
             )
 
-        normalized = _coerce_embedding_rows(embeddings, len(ids))
-
+        numpy = _load_numpy()
+        normalized_rows = _coerce_embedding_rows(embeddings, len(ids))
+        normalized = numpy.asarray(normalized_rows, dtype="float64")
+        del normalized_rows
         edge_distances: dict[tuple[int, int], float] = {}
         effective_count = min(neighbor_count, max(0, len(ids) - 1))
-        for source_index in range(len(ids)):
-            ranked_neighbors = sorted(
-                (
+        for source_start in range(0, len(ids), _SIMILARITY_BLOCK_SIZE):
+            source_end = min(source_start + _SIMILARITY_BLOCK_SIZE, len(ids))
+            similarities = normalized[source_start:source_end] @ normalized.T
+            numpy.clip(similarities, -1.0, 1.0, out=similarities)
+            for block_index, source_index in enumerate(range(source_start, source_end)):
+                if effective_count == 0:
+                    continue
+                source_similarities = similarities[block_index]
+                source_similarities[source_index] = float("-inf")
+                partition = numpy.argpartition(
+                    -source_similarities,
+                    effective_count - 1,
+                )[:effective_count]
+                cutoff_similarity = float(numpy.min(source_similarities[partition]))
+                candidate_indices = numpy.flatnonzero(
+                    source_similarities >= cutoff_similarity
+                ).tolist()
+                ranked_neighbors = sorted(
                     (
-                        1.0
-                        - max(
-                            -1.0,
-                            min(
-                                1.0,
-                                sum(
-                                    source_value * target_value
-                                    for source_value, target_value in zip(
-                                        normalized[source_index],
-                                        normalized[target_index],
-                                        strict=True,
-                                    )
-                                ),
-                            ),
-                        ),
-                        ids[target_index],
-                        target_index,
+                        (
+                            1.0 - float(source_similarities[target_index]),
+                            ids[target_index],
+                            target_index,
+                        )
+                        for target_index in candidate_indices
+                    ),
+                    key=lambda item: (item[0], item[1]),
+                )
+                for cosine_distance, _, target_index in ranked_neighbors[:effective_count]:
+                    pair = (
+                        (source_index, target_index)
+                        if source_index < target_index
+                        else (target_index, source_index)
                     )
-                    for target_index in range(len(ids))
-                    if target_index != source_index
-                ),
-                key=lambda item: (item[0], item[1]),
-            )
-            for cosine_distance, _, target_index in ranked_neighbors[:effective_count]:
-                pair = (
-                    (source_index, target_index)
-                    if source_index < target_index
-                    else (target_index, source_index)
-                )
-                edge_distance = min(
-                    max(cosine_distance, minimum_edge_distance),
-                    maximum_distance,
-                )
-                existing = edge_distances.get(pair)
-                if existing is None or edge_distance < existing:
-                    edge_distances[pair] = edge_distance
+                    edge_distance = min(
+                        max(cosine_distance, minimum_edge_distance),
+                        maximum_distance,
+                    )
+                    existing = edge_distances.get(pair)
+                    if existing is None or edge_distance < existing:
+                        edge_distances[pair] = edge_distance
 
         edges = (
             GraphEdge(ids[source_index], ids[target_index], distance)

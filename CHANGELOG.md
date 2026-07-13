@@ -17,6 +17,8 @@ All notable changes to this project are documented here.
   checksum, selected conversation IDs, model, graph, package, and git provenance.
 - Cache repeated query embeddings in the eval provider and reuse one bounded
   shortest-path search across all targets for a graph source.
+- Build embedding kNN graphs with blockwise NumPy top-k selection instead of
+  Python-sorting every corpus pair, keeping large judged corpora tractable.
 - Publish the reproducible TopiOCQA n=25 MiniLM/kNN micro-corpus result:
   map-matched β=1.0 lifts follow-up nDCG@3 by `+0.084` with paired 95% CI
   `[+0.046, +0.128]`; two runs produced byte-identical reports.

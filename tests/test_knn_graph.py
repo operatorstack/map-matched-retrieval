@@ -57,6 +57,20 @@ def test_tie_breaking_is_stable_across_input_order() -> None:
             assert first.distance(source, target) == second.distance(source, target)
 
 
+def test_knn_graph_connects_neighbors_across_similarity_blocks() -> None:
+    chunk_ids = [f"chunk-{index:03d}" for index in range(258)]
+    embeddings = [[1.0, index / 1000.0] for index in range(258)]
+
+    graph = KNNGraph.from_embeddings(
+        chunk_ids,
+        embeddings,
+        neighbor_count=1,
+        maximum_distance=3.0,
+    )
+
+    assert graph.distance("chunk-255", "chunk-256") < graph.maximum_distance
+
+
 @pytest.mark.parametrize(
     ("chunk_ids", "embeddings", "message"),
     [
