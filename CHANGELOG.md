@@ -4,6 +4,22 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+- Add an opt-in Gemini conversational query rewrite baseline for TREC CAsT,
+  configured by `GEMINI_API_KEY`, with paired pointwise comparisons and
+  model/prompt provenance in evaluation reports.
+- Replace unreachable GitHub Actions commit references with the current
+  `checkout@v7` and `setup-python@v6` major tags, restore Python 3.11 NumPy
+  compatibility, and keep the base-package job dependency-free.
+- Add paired conversation-level bootstrap intervals for method nDCG@3 deltas,
+  preserve conversation IDs in reports, and fix the aggregate `all`-slice
+  bootstrap interval.
+- Add a pinned TopiOCQA n=25 MiniLM/kNN reproduction script with dataset
+  checksum, selected conversation IDs, model, graph, package, and git provenance.
+- Cache repeated query embeddings in the eval provider and reuse one bounded
+  shortest-path search across all targets for a graph source.
+- Publish the reproducible TopiOCQA n=25 MiniLM/kNN micro-corpus result:
+  map-matched β=1.0 lifts follow-up nDCG@3 by `+0.084` with paired 95% CI
+  `[+0.046, +0.128]`; two runs produced byte-identical reports.
 - Bootstrap confidence intervals: conversation-level percentile bootstrap for
   nDCG@3 per slice (`--bootstrap-samples`, default 0; use 1000 for publishable
   runs). CIs appear in JSON reports and the markdown table.

@@ -96,9 +96,18 @@ class InMemoryCorpusGraph:
         if cached is not None:
             return cached
         distances = self._bounded_distances(source_chunk_id, self._maximum_distance)
-        result = min(distances.get(target_chunk_id, self._maximum_distance), self._maximum_distance)
-        self._distance_cache[cache_key] = result
-        return result
+        for chunk_id in self._adjacency:
+            distance = min(
+                distances.get(chunk_id, self._maximum_distance),
+                self._maximum_distance,
+            )
+            self._distance_cache[self._cache_key(source_chunk_id, chunk_id)] = distance
+        if cache_key not in self._distance_cache:
+            self._distance_cache[cache_key] = min(
+                distances.get(target_chunk_id, self._maximum_distance),
+                self._maximum_distance,
+            )
+        return self._distance_cache[cache_key]
 
     def neighborhood(self, chunk_id: str, radius: float) -> tuple[str, ...]:
         if not chunk_id:

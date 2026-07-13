@@ -24,6 +24,7 @@ class BruteForceProvider:
         self._passage_ids = ids
         self._passage_embeddings = tuple(tuple(values) for values in passage_embeddings)
         self._embed_query = embed_query
+        self._query_embedding_cache: dict[str, tuple[float, ...]] = {}
 
     @property
     def passage_count(self) -> int:
@@ -32,7 +33,10 @@ class BruteForceProvider:
     def candidates(self, query: str, limit: int) -> list[ScoredCandidate]:
         if limit <= 0:
             raise ValueError("limit must be greater than zero")
-        query_embedding = tuple(self._embed_query.embed_query(query))
+        query_embedding = self._query_embedding_cache.get(query)
+        if query_embedding is None:
+            query_embedding = tuple(self._embed_query.embed_query(query))
+            self._query_embedding_cache[query] = query_embedding
         scored = [
             (
                 dot_product(query_embedding, passage_embedding),

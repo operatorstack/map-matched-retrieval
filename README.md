@@ -80,6 +80,7 @@ python -m pip install -e ".[st]"
 | `graph` | Embedding-derived kNN graphs |
 | `faiss` | kNN graphs and the FAISS candidate provider |
 | `eval` | Benchmark loaders, baselines, metrics, and reports |
+| `gemini` | Gemini conversational query rewrite baseline |
 | `st` | Sentence-transformer embeddings for evaluation |
 
 ## Quickstart
@@ -193,8 +194,9 @@ context are separate outputs.
 
 The evaluation harness reports nDCG@3/5 and Recall@k separately for ambiguous
 follow-up turns and sharp standalone turns. It includes pointwise, history
-concatenation, Maximal Marginal Relevance, and resolved-query baselines, plus
-conversation-level percentile bootstrap confidence intervals.
+concatenation, optional Gemini query rewriting, Maximal Marginal Relevance, and
+resolved-query baselines, plus conversation-level percentile bootstrap confidence
+intervals. Method deltas use paired resampling of the same conversations.
 
 ```console
 python -m mapmatched.eval \
@@ -203,21 +205,33 @@ python -m mapmatched.eval \
 ```
 
 The synthetic benchmark is a deterministic smoke test, not research evidence.
-The current preliminary TopiOCQA micro-corpus result uses 25 conversations,
-MiniLM embeddings, a kNN graph, full candidate ranking, and no bootstrap CI:
+The pinned TopiOCQA micro-corpus profile uses 25 conversations, MiniLM
+embeddings, a 10-neighbor kNN graph, full candidate ranking, and 1,000 paired
+conversation-level bootstrap draws:
 
-| Measurement | nDCG@3 |
-| --- | ---: |
-| Pointwise follow-up | 0.150 |
-| Map-matched follow-up | 0.234 |
-| Follow-up delta | +0.084 |
-| Standalone delta | +0.031 |
+| Slice | Method | nDCG@3 | Delta vs pointwise | Paired delta 95% CI |
+| --- | --- | ---: | ---: | ---: |
+| Follow-up | Pointwise | 0.150 | +0.000 | — |
+| Follow-up | Map-matched β=0.5 | 0.195 | +0.045 | [+0.018, +0.077] |
+| Follow-up | Map-matched β=1.0 | 0.234 | +0.084 | [+0.046, +0.128] |
+| Follow-up | MMR | 0.151 | +0.001 | [+0.000, +0.003] |
+| Standalone | Map-matched β=1.0 | 0.373 | +0.031 | [+0.009, +0.055] |
 
-These numbers demonstrate that the pipeline can produce measurable lift, but
-they are not a full-corpus or statistically conclusive benchmark. Structured
-section graphs also underperform on topic-switch-heavy TopiOCQA, an important
-negative result rather than a hidden one. See [`docs/eval.md`](docs/eval.md) for
-benchmark tiers, methodology, limitations, and reproduction commands.
+Both runs produced byte-identical reports. The positive paired intervals are
+evidence for this fixed micro-corpus, not a full-Wikipedia or cross-benchmark
+claim. Structured section graphs also underperform on topic-switch-heavy
+TopiOCQA, an important negative result rather than a hidden one. See the
+[`committed result`](results/topiocqa_n25_minilm_knn.md) and
+[`evaluation guide`](docs/eval.md) for provenance, all baselines, limitations,
+and reproduction commands.
+
+Reproduce the pinned n=25 MiniLM/kNN profile after downloading the validation
+split:
+
+```console
+python -m pip install -e ".[eval,graph,st]"
+./scripts/reproduce_topiocqa_n25.sh data/topiocqa_valid.jsonl
+```
 
 ## Design choices and limits
 

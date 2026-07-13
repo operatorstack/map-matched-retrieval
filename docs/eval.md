@@ -1,18 +1,20 @@
 # Evaluation harness
 
 Map-matched retrieval makes a narrow claim: it should lift **underspecified
-follow-up turns** without materially harming **sharp standalone turns**. M2 adds
-an optional evaluation harness behind `pip install map-matched-retrieval[eval]`.
+follow-up turns** without materially harming **sharp standalone turns**. The
+evaluation harness measures that claim without making conversational RAG the
+library's API boundary.
 
 ## Install
 
 ```console
-pip install map-matched-retrieval[eval,graph]
+python -m pip install -e ".[eval,graph,st]"
 ```
 
 The harness uses NumPy for kNN graph construction and optional Hugging Face /
 ir-datasets loaders for benchmark metadata. It does **not** download embedding
-models.
+models. Install `.[eval,graph,st,gemini]` only when running the Gemini rewrite
+baseline.
 
 ## Tiers
 
@@ -54,6 +56,7 @@ best map-matched configuration against the β=0 pointwise baseline:
 | `pointwise` | `transition_weight=0` — independent per-turn top-1 |
 | `mapmatched` | Full trajectory decoder with configurable β |
 | `history_concat` | Dense retrieval over concatenated query history |
+| `gemini_rewrite` | Gemini rewrites each turn into a standalone query before dense retrieval |
 | `maximal_marginal_relevance` | Per-turn MMR re-ranking (not map-matched retrieval) |
 | `resolved_oracle` | CAsT resolved utterances (upper bound) |
 
@@ -61,23 +64,48 @@ best map-matched configuration against the β=0 pointwise baseline:
 
 ### TopiOCQA (micro)
 
+Download `data/topiocqa_valid.jsonl` from the
+[TopiOCQA dataset repository](https://huggingface.co/datasets/McGill-NLP/TopiOCQA),
+then run the pinned profile:
+
 ```console
-# download a split first (HF datasets dropped the custom dataset script):
-#   https://huggingface.co/datasets/McGill-NLP/TopiOCQA -> data/topiocqa_valid.jsonl
-python -m mapmatched.eval --benchmark topiocqa \
-    --data-path topiocqa_valid.jsonl --conversation-limit 25 \
-    --embedder sentence-transformers --graph-source section --ranking-mode full
+./scripts/reproduce_topiocqa_n25.sh data/topiocqa_valid.jsonl
 ```
 
 Reads the released JSON/JSONL directly (`--data-path` or `MAPMATCHED_TOPIOCQA_PATH`)
-and builds a micro-corpus from gold passages and additional answers. The section
-graph keys on the Wikipedia article title. Note TopiOCQA is topic-switch heavy,
-so it stresses the standalone (H0) side as much as the follow-up (H1) side.
+and builds a micro-corpus from gold passages and additional answers. The pinned
+profile selects the first 25 conversations in file order, records the file
+SHA-256 and selected IDs, uses `sentence-transformers/all-MiniLM-L6-v2`, a
+10-neighbor kNN graph, full ranking, a 100-candidate window, and 1,000 bootstrap
+draws with seed 42.
+
+TopiOCQA is topic-switch heavy, so it stresses the standalone side as much as the
+follow-up side. It is licensed
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/); the
+dataset is not redistributed by this repository. These runs are micro-corpus
+experiments, not full-Wikipedia retrieval.
+
+The pinned run at git revision `60a9d694b807c3eb49da2a00743c6f1a05d52e6d`
+produced byte-identical reports twice:
+
+| Slice | Method | nDCG@3 | Delta vs pointwise | Paired delta 95% CI |
+| --- | --- | ---: | ---: | ---: |
+| Follow-up | Map-matched β=0.5 | 0.195 | +0.045 | [+0.018, +0.077] |
+| Follow-up | Map-matched β=1.0 | 0.234 | +0.084 | [+0.046, +0.128] |
+| Follow-up | MMR | 0.151 | +0.001 | [+0.000, +0.003] |
+| Standalone | Map-matched β=1.0 | 0.373 | +0.031 | [+0.009, +0.055] |
+
+The complete aggregate table and provenance are committed in
+[`results/topiocqa_n25_minilm_knn.md`](../results/topiocqa_n25_minilm_knn.md).
+Positive intervals support the claim on this fixed 25-conversation micro-corpus;
+they do not establish full-corpus or cross-benchmark generalization.
 
 ### TREC CAsT 2019 (micro)
 
 ```console
-python -m mapmatched.eval --benchmark cast2019 --embedder sentence-transformers
+export GEMINI_API_KEY="..."
+python -m pip install -e ".[eval,graph,st,gemini]"
+./scripts/reproduce_cast2019_gemini.sh
 ```
 
 Uses ir-datasets id `trec-cast/v1/2019/judged`. Real passage text comes from the
@@ -86,6 +114,15 @@ first use — **multi-GB**, so a full run is heavy and best done on a workstatio
 Without the collection the loader degrades to using doc ids as passage text
 (metrics not meaningful). CAsT's drill-down follow-ups are the fairer test for
 the follow-up-lift claim than TopiOCQA's topic switches.
+
+The script adds `gemini_rewrite` to the normal ablation grid. It sends each raw
+utterance and its prior user utterances to `gemini-3.5-flash` with minimal
+thinking, retrieves with the returned standalone query, and compares it with both
+pointwise retrieval and CAsT's manual `resolved_oracle`. `GEMINI_API_KEY` is read
+from the environment and is never written to reports. Reports record the Gemini
+model and prompt version. The baseline is opt-in because it makes one paid,
+networked model request per selected turn; `--conversation-limit` bounds those
+requests. Hosted-model output is not immutable across model revisions.
 
 ## Graph source and ranking mode
 
@@ -100,17 +137,20 @@ the follow-up-lift claim than TopiOCQA's topic switches.
 ## Bootstrap confidence intervals
 
 Use `--bootstrap-samples` to resample conversations and compute 95% percentile
-CIs for nDCG@3 on each slice. Disabled by default (`0`) for fast smoke runs;
-use `1000` for publishable numbers. `--bootstrap-seed` (default 42) keeps runs
-reproducible.
+CIs for nDCG@3 on each slice. Method comparisons resample the same conversations
+for treatment and pointwise retrieval, producing a paired CI on the nDCG@3
+delta. Disabled by default (`0`) for fast smoke runs; use `1000` for reported
+numbers. `--bootstrap-seed` (default 42) keeps runs reproducible.
 
 ```console
 python -m mapmatched.eval --benchmark synthetic \
     --bootstrap-samples 200 --output eval-report.json
 ```
 
-The markdown table adds an `nDCG@3 95% CI` column; JSON reports include
-`ndcg_at_3_ci` as `[lower, upper]` on each slice.
+The markdown table includes absolute and paired-delta 95% CIs. JSON reports
+include method-level `ndcg_at_3_ci` values and explicit `comparisons` with
+`ndcg_at_3_delta_ci`. The claim gate remains based on configured point-estimate
+thresholds; a paired interval excluding zero is the uncertainty check.
 
 ## Reproducing headline numbers
 
@@ -118,12 +158,11 @@ The README headline table uses **Tier B dev-slice** results with a
 caller-supplied embedder. The built-in `DeterministicHashEmbedder` is for tests
 and smoke runs only.
 
-For publishable numbers:
-
-1. Choose an embedding model and implement `QueryEmbedder` / `PassageEmbedder`.
-2. Build a micro-corpus or full corpus index.
-3. Run the ablation grid and record JSON + markdown output.
-4. Paste the markdown table into README with the embedder and tier noted.
+The TopiOCQA script writes full JSON and markdown reports under
+`reports/topiocqa-n25-minilm-knn-full/`. Generated reports are ignored because
+they contain machine-run detail; committed headline values must include the
+profile, dataset SHA-256, model, graph settings, conversation count, and paired
+interval.
 
 ## Output
 

@@ -1,9 +1,20 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import os
+import subprocess
 from pathlib import Path
 
+from mapmatched import __version__
+
 from .ablations import run_ablation_grid
+from .baselines import (
+    DEFAULT_GEMINI_MODEL,
+    GEMINI_REWRITE_PROMPT_VERSION,
+    ConversationQueryRewriter,
+    create_gemini_query_rewriter,
+)
 from .embedder import DeterministicHashEmbedder, SentenceTransformerEmbedder
 from .loaders import load_cast2019_micro, load_synthetic_fixture, load_topiocqa_micro
 from .report import render_json, render_markdown_table
@@ -45,6 +56,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="knn = embedding fallback graph; section = structured group_key graph.",
     )
     parser.add_argument(
+        "--knn-neighbors",
+        type=int,
+        default=10,
+        help="Neighbors per passage when --graph-source knn.",
+    )
+    parser.add_argument(
         "--ranking-mode",
         choices=("full", "rank1"),
         default="full",
@@ -71,7 +88,22 @@ def build_parser() -> argparse.ArgumentParser:
         default=42,
         help="Random seed for bootstrap resampling.",
     )
+    parser.add_argument(
+        "--profile",
+        default=None,
+        help="Stable run profile name stored in report metadata.",
+    )
     parser.add_argument("--include-resolved-oracle", action="store_true")
+    parser.add_argument(
+        "--include-gemini-rewrite",
+        action="store_true",
+        help="Evaluate a Gemini conversational query rewrite baseline.",
+    )
+    parser.add_argument(
+        "--gemini-model",
+        default=DEFAULT_GEMINI_MODEL,
+        help="Gemini model used by --include-gemini-rewrite.",
+    )
     return parser
 
 
@@ -90,17 +122,21 @@ def load_benchmark(
         )
     if name == "cast2019":
         conversations, passages = load_cast2019_micro()
-        return conversations, passages
+        return conversations[:conversation_limit], passages
     raise ValueError(f"unsupported benchmark: {name}")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    query_rewriter: ConversationQueryRewriter | None = None
+    if args.include_gemini_rewrite:
+        query_rewriter = create_gemini_query_rewriter(model=args.gemini_model)
+    data_path = _effective_data_path(args.benchmark, args.data_path)
     conversations, passages = load_benchmark(
         args.benchmark,
         conversation_limit=args.conversation_limit,
-        data_path=args.data_path,
+        data_path=data_path,
     )
     embedder: DeterministicHashEmbedder | SentenceTransformerEmbedder
     if args.embedder == "sentence-transformers":
@@ -117,8 +153,23 @@ def main(argv: list[str] | None = None) -> int:
         follow_up_min_delta=args.follow_up_min_delta,
         ranking_mode=args.ranking_mode,
         graph_source=args.graph_source,
+        knn_neighbor_count=args.knn_neighbors,
         bootstrap_samples=args.bootstrap_samples,
         bootstrap_seed=args.bootstrap_seed,
+        profile=args.profile,
+        dataset_filename=None if data_path is None else data_path.name,
+        dataset_sha256=None if data_path is None else _sha256(data_path),
+        conversation_ids=tuple(conversation.conversation_id for conversation in conversations),
+        embedding_model=args.st_model
+        if args.embedder == "sentence-transformers"
+        else embedder.name,
+        package_version=__version__,
+        git_revision=_git_revision(),
+        query_rewrite_provider="gemini" if args.include_gemini_rewrite else None,
+        query_rewrite_model=args.gemini_model if args.include_gemini_rewrite else None,
+        query_rewrite_prompt_version=GEMINI_REWRITE_PROMPT_VERSION
+        if args.include_gemini_rewrite
+        else None,
     )
     report = run_ablation_grid(
         conversations=conversations,
@@ -126,7 +177,9 @@ def main(argv: list[str] | None = None) -> int:
         embedder=embedder,
         eval_config=eval_config,
         candidate_limit=args.candidate_limit,
+        include_gemini_rewrite=args.include_gemini_rewrite,
         include_resolved_oracle=args.include_resolved_oracle or args.benchmark == "cast2019",
+        query_rewriter=query_rewriter,
     )
     args.output.write_text(render_json(report), encoding="utf-8")
     markdown = render_markdown_table(report)
@@ -135,6 +188,41 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(markdown)
     return 0
+
+
+def _effective_data_path(benchmark: str, data_path: Path | None) -> Path | None:
+    if data_path is not None:
+        return data_path
+    if benchmark != "topiocqa":
+        return None
+    environment_path = os.environ.get("MAPMATCHED_TOPIOCQA_PATH")
+    if environment_path is None:
+        return None
+    return Path(environment_path)
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as data_file:
+        for block in iter(lambda: data_file.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _git_revision() -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    revision = result.stdout.strip()
+    return revision or None
 
 
 if __name__ == "__main__":

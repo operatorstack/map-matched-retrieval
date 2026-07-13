@@ -1,0 +1,4 @@
+{"Conversation_no": 1, "Turn_no": 1, "Question": "What is orbital mechanics?", "Gold_passage": {"id": "orbit-1", "title": "Orbital mechanics", "text": "Orbital mechanics studies spacecraft motion."}, "Additional_answers": [{"Answer": "Gravity determines an orbit.", "Topic": "Gravity"}]}
+{"Conversation_no": 2, "Turn_no": 1, "Question": "What is photosynthesis?", "Gold_passage": {"id": "plant-1", "title": "Photosynthesis", "text": "Plants convert light into chemical energy."}, "Additional_answers": []}
+{"Conversation_no": 1, "Turn_no": 2, "Question": "How are transfers performed?", "Gold_passage": {"id": "orbit-2", "title": "Orbital mechanics", "text": "A transfer orbit moves between trajectories."}, "Additional_answers": []}
+{"Conversation_no": 3, "Turn_no": 1, "Question": "What is plate tectonics?", "Gold_passage": {"id": "earth-1", "title": "Plate tectonics", "text": "Tectonic plates move across Earth."}, "Additional_answers": []}

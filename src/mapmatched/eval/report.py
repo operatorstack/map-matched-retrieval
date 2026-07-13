@@ -2,20 +2,41 @@ from __future__ import annotations
 
 import json
 
-from .types import EvalReport, MethodMetrics, SliceName
+from .types import EvalReport, MethodComparison, MethodMetrics, SliceName
 
 
 def render_markdown_table(report: EvalReport) -> str:
+    metadata = [
+        f"Benchmark: `{report.config.benchmark}`",
+        f"Tier: `{report.config.tier}`",
+        f"Embedder: `{report.config.embedder_name}`",
+    ]
+    if report.config.profile is not None:
+        metadata.append(f"Profile: `{report.config.profile}`")
     lines = [
         "## Benchmark results (dev slice)",
         "",
-        f"Benchmark: `{report.config.benchmark}` · Tier: `{report.config.tier}` · "
-        f"Embedder: `{report.config.embedder_name}`",
+        " · ".join(metadata),
         "",
-        "| Benchmark | Slice | Method | β | nDCG@3 | nDCG@3 95% CI | nDCG@5 | Recall | Δ vs β=0 |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
+    if report.config.dataset_filename is not None:
+        lines.extend(
+            [
+                f"Data: `{report.config.dataset_filename}` · "
+                f"SHA-256: `{report.config.dataset_sha256}` · "
+                f"Conversations: `{len(report.config.conversation_ids)}`",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "| Benchmark | Slice | Method | β | nDCG@3 | nDCG@3 95% CI | "
+            "nDCG@5 | Recall | Δ vs β=0 (95% CI) |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        ]
+    )
     baseline_by_slice = _baseline_ndcg(report.methods)
+    comparison_by_slice = _comparison_delta_cis(report.comparisons)
     for method in report.methods:
         for slice_metrics in method.slices:
             if slice_metrics.slice_name == "all":
@@ -25,7 +46,17 @@ def render_markdown_table(report: EvalReport) -> str:
             baseline = baseline_by_slice.get(
                 (method.candidate_limit, method.fixed_lag, slice_metrics.slice_name),
             )
-            delta = _format_delta(slice_metrics.ndcg_at_3, baseline)
+            delta_ci = comparison_by_slice.get(
+                (
+                    method.method_name,
+                    method.transition_weight,
+                    method.candidate_limit,
+                    method.fixed_lag,
+                    method.graph_mode,
+                    slice_metrics.slice_name,
+                )
+            )
+            delta = _format_delta(slice_metrics.ndcg_at_3, baseline, delta_ci)
             beta = "—" if method.transition_weight is None else f"{method.transition_weight:.2f}"
             lines.append(
                 "| "
@@ -83,10 +114,42 @@ def _baseline_ndcg(
     return baseline
 
 
-def _format_delta(value: float, baseline: float | None) -> str:
+def _comparison_delta_cis(
+    comparisons: tuple[MethodComparison, ...],
+) -> dict[
+    tuple[str, float | None, int, int | None, str, SliceName],
+    tuple[float, float] | None,
+]:
+    by_slice: dict[
+        tuple[str, float | None, int, int | None, str, SliceName],
+        tuple[float, float] | None,
+    ] = {}
+    for comparison in comparisons:
+        for slice_metrics in comparison.slices:
+            by_slice[
+                (
+                    comparison.method_name,
+                    comparison.transition_weight,
+                    comparison.candidate_limit,
+                    comparison.fixed_lag,
+                    comparison.graph_mode,
+                    slice_metrics.slice_name,
+                )
+            ] = slice_metrics.ndcg_at_3_delta_ci
+    return by_slice
+
+
+def _format_delta(
+    value: float,
+    baseline: float | None,
+    ci: tuple[float, float] | None,
+) -> str:
     if baseline is None:
         return "—"
-    return f"{value - baseline:+.3f}"
+    delta = f"{value - baseline:+.3f}"
+    if ci is None:
+        return delta
+    return f"{delta} [{ci[0]:+.3f}, {ci[1]:+.3f}]"
 
 
 def _format_ci(ci: tuple[float, float] | None) -> str:

@@ -61,8 +61,8 @@ def test_evaluate_claim_checks_follow_up_and_standalone_gates() -> None:
 
 def test_aggregate_slice_metrics_skips_other_slices() -> None:
     turns = (
-        TurnMetrics(0, 1.0, 1.0, 1.0, 0.0, "standalone"),
-        TurnMetrics(1, 0.5, 0.5, 0.5, 1.0, "follow_up"),
+        TurnMetrics("conversation-1", 0, 1.0, 1.0, 1.0, 0.0, "standalone"),
+        TurnMetrics("conversation-1", 1, 0.5, 0.5, 0.5, 1.0, "follow_up"),
     )
     follow_up = aggregate_slice_metrics(turns, "follow_up")
     assert follow_up.turn_count == 1

@@ -20,15 +20,15 @@ def _resolve_data_path(data_path: str | os.PathLike[str] | None) -> Path:
 
     HuggingFace `datasets` dropped support for the custom dataset *script* that
     `McGill-NLP/TopiOCQA` ships, so we read the released JSON directly instead.
-    Point this at a downloaded split (e.g. ``topiocqa_dev.json``) via the
+    Point this at the downloaded validation split (``topiocqa_valid.jsonl``) via the
     ``data_path`` argument or the ``MAPMATCHED_TOPIOCQA_PATH`` environment
     variable.
     """
     candidate = data_path if data_path is not None else os.environ.get(_PATH_ENV_VAR)
     if not candidate:
         raise EvalDependencyUnavailableError(
-            "TopiOCQA loader needs the dataset JSON. Download a split (e.g. "
-            "topiocqa_dev.json) from https://github.com/McGill-NLP/topiocqa and "
+            "TopiOCQA loader needs the dataset JSONL. Download data/topiocqa_valid.jsonl "
+            "from https://huggingface.co/datasets/McGill-NLP/TopiOCQA and "
             f"pass data_path=... or set {_PATH_ENV_VAR}."
         )
     path = Path(candidate)
