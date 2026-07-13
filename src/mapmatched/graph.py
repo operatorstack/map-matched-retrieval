@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import heapq
 import math
+from collections import OrderedDict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
@@ -37,13 +38,17 @@ class InMemoryCorpusGraph:
         nodes: Iterable[str] = (),
         directed: bool = False,
         maximum_distance: float = 10.0,
+        distance_cache_size: int = 256,
     ) -> None:
         if not math.isfinite(maximum_distance) or maximum_distance <= 0.0:
             raise ValueError("maximum_distance must be finite and greater than zero")
+        if distance_cache_size <= 0:
+            raise ValueError("distance_cache_size must be greater than zero")
         self._maximum_distance = maximum_distance
         self._directed = directed
+        self._distance_cache_size = distance_cache_size
         self._adjacency: dict[str, dict[str, float]] = {}
-        self._distance_cache: dict[tuple[str, str], float] = {}
+        self._distance_cache: OrderedDict[str, dict[str, float]] = OrderedDict()
 
         for node in nodes:
             if not node:
@@ -62,12 +67,14 @@ class InMemoryCorpusGraph:
         nodes: Iterable[str] = (),
         directed: bool = False,
         maximum_distance: float = 10.0,
+        distance_cache_size: int = 256,
     ) -> InMemoryCorpusGraph:
         return cls(
             (GraphEdge(source, target) for source, target in edges),
             nodes=nodes,
             directed=directed,
             maximum_distance=maximum_distance,
+            distance_cache_size=distance_cache_size,
         )
 
     @property
@@ -81,33 +88,39 @@ class InMemoryCorpusGraph:
         if current is None or distance < current:
             neighbors[target] = distance
 
-    def _cache_key(self, source: str, target: str) -> tuple[str, str]:
-        if self._directed or source <= target:
-            return source, target
-        return target, source
-
     def distance(self, source_chunk_id: str, target_chunk_id: str) -> float:
         if not source_chunk_id or not target_chunk_id:
             raise ValueError("distance chunk IDs must not be empty")
         if source_chunk_id == target_chunk_id:
             return 0.0
-        cache_key = self._cache_key(source_chunk_id, target_chunk_id)
-        cached = self._distance_cache.get(cache_key)
-        if cached is not None:
-            return cached
-        distances = self._bounded_distances(source_chunk_id, self._maximum_distance)
-        for chunk_id in self._adjacency:
-            distance = min(
-                distances.get(chunk_id, self._maximum_distance),
-                self._maximum_distance,
-            )
-            self._distance_cache[self._cache_key(source_chunk_id, chunk_id)] = distance
-        if cache_key not in self._distance_cache:
-            self._distance_cache[cache_key] = min(
+        distances = self._cached_distances(source_chunk_id)
+        if distances is not None:
+            return min(
                 distances.get(target_chunk_id, self._maximum_distance),
                 self._maximum_distance,
             )
-        return self._distance_cache[cache_key]
+        if not self._directed:
+            reverse_distances = self._cached_distances(target_chunk_id)
+            if reverse_distances is not None:
+                return min(
+                    reverse_distances.get(source_chunk_id, self._maximum_distance),
+                    self._maximum_distance,
+                )
+        distances = self._bounded_distances(source_chunk_id, self._maximum_distance)
+        self._distance_cache[source_chunk_id] = distances
+        self._distance_cache.move_to_end(source_chunk_id)
+        if len(self._distance_cache) > self._distance_cache_size:
+            self._distance_cache.popitem(last=False)
+        return min(
+            distances.get(target_chunk_id, self._maximum_distance),
+            self._maximum_distance,
+        )
+
+    def _cached_distances(self, source: str) -> dict[str, float] | None:
+        distances = self._distance_cache.get(source)
+        if distances is not None:
+            self._distance_cache.move_to_end(source)
+        return distances
 
     def neighborhood(self, chunk_id: str, radius: float) -> tuple[str, ...]:
         if not chunk_id:

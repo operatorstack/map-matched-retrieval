@@ -19,6 +19,9 @@ All notable changes to this project are documented here.
   shortest-path search across all targets for a graph source.
 - Build embedding kNN graphs with blockwise NumPy top-k selection instead of
   Python-sorting every corpus pair, keeping large judged corpora tractable.
+- Bound graph shortest-path caching by source and bypass graph searches when
+  `transition_weight=0`, preventing pointwise evaluation from materializing an
+  all-pairs distance cache.
 - Publish the reproducible TopiOCQA n=25 MiniLM/kNN micro-corpus result:
   map-matched β=1.0 lifts follow-up nDCG@3 by `+0.084` with paired 95% CI
   `[+0.046, +0.128]`; two runs produced byte-identical reports.

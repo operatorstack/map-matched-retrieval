@@ -145,8 +145,13 @@ class StandaloneDecoder:
                     predecessor_score = cumulative_scores[turn_index - 1][predecessor_index]
                     if predecessor_score == float("-inf"):
                         continue
-                    graph_distance = graph.distance(predecessor.chunk_id, candidate.chunk_id)
-                    weighted_cost = transition_weight * graph_distance
+                    weighted_cost = 0.0
+                    if transition_weight != 0.0:
+                        graph_distance = graph.distance(
+                            predecessor.chunk_id,
+                            candidate.chunk_id,
+                        )
+                        weighted_cost = transition_weight * graph_distance
                     score = predecessor_score - weighted_cost
                     if not math.isfinite(score):
                         raise ValueError("decoder accumulation produced a nonfinite score")
@@ -223,7 +228,7 @@ class StandaloneDecoder:
         cumulative_score = 0.0
         for turn_index, candidate_index in enumerate(candidate_indices):
             candidate = trellis[turn_index][candidate_index]
-            if turn_index == 0:
+            if turn_index == 0 or transition_weight == 0.0:
                 graph_distance = 0.0
             else:
                 previous_candidate = trellis[turn_index - 1][candidate_indices[turn_index - 1]]

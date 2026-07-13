@@ -41,14 +41,25 @@ def test_hand_computed_viterbi_fixture() -> None:
 
 
 def test_zero_transition_weight_equals_pointwise_argmax() -> None:
+    class CountingDistanceGraph(InMemoryCorpusGraph):
+        def __init__(self) -> None:
+            super().__init__()
+            self.distance_count = 0
+
+        def distance(self, source_chunk_id: str, target_chunk_id: str) -> float:
+            self.distance_count += 1
+            return super().distance(source_chunk_id, target_chunk_id)
+
+    graph = CountingDistanceGraph()
     path = StandaloneDecoder().decode(
         hand_computed_trellis(),
-        graph=line_graph(),
+        graph=graph,
         emission_weight=1.0,
         transition_weight=0.0,
     )
 
     assert path.chunk_ids == ("0", "2", "0")
+    assert graph.distance_count == 0
 
 
 def test_fixed_lag_behavior() -> None:
