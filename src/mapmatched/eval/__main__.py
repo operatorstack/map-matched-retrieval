@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import os
+import subprocess
 from pathlib import Path
+
+from mapmatched import __version__
 
 from .ablations import run_ablation_grid
 from .embedder import DeterministicHashEmbedder, SentenceTransformerEmbedder
@@ -45,6 +50,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="knn = embedding fallback graph; section = structured group_key graph.",
     )
     parser.add_argument(
+        "--knn-neighbors",
+        type=int,
+        default=10,
+        help="Neighbors per passage when --graph-source knn.",
+    )
+    parser.add_argument(
         "--ranking-mode",
         choices=("full", "rank1"),
         default="full",
@@ -70,6 +81,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=42,
         help="Random seed for bootstrap resampling.",
+    )
+    parser.add_argument(
+        "--profile",
+        default=None,
+        help="Stable run profile name stored in report metadata.",
     )
     parser.add_argument("--include-resolved-oracle", action="store_true")
     return parser
@@ -97,10 +113,11 @@ def load_benchmark(
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    data_path = _effective_data_path(args.benchmark, args.data_path)
     conversations, passages = load_benchmark(
         args.benchmark,
         conversation_limit=args.conversation_limit,
-        data_path=args.data_path,
+        data_path=data_path,
     )
     embedder: DeterministicHashEmbedder | SentenceTransformerEmbedder
     if args.embedder == "sentence-transformers":
@@ -117,8 +134,20 @@ def main(argv: list[str] | None = None) -> int:
         follow_up_min_delta=args.follow_up_min_delta,
         ranking_mode=args.ranking_mode,
         graph_source=args.graph_source,
+        knn_neighbor_count=args.knn_neighbors,
         bootstrap_samples=args.bootstrap_samples,
         bootstrap_seed=args.bootstrap_seed,
+        profile=args.profile,
+        dataset_filename=None if data_path is None else data_path.name,
+        dataset_sha256=None if data_path is None else _sha256(data_path),
+        conversation_ids=tuple(
+            conversation.conversation_id for conversation in conversations
+        ),
+        embedding_model=args.st_model
+        if args.embedder == "sentence-transformers"
+        else embedder.name,
+        package_version=__version__,
+        git_revision=_git_revision(),
     )
     report = run_ablation_grid(
         conversations=conversations,
@@ -135,6 +164,41 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(markdown)
     return 0
+
+
+def _effective_data_path(benchmark: str, data_path: Path | None) -> Path | None:
+    if data_path is not None:
+        return data_path
+    if benchmark != "topiocqa":
+        return None
+    environment_path = os.environ.get("MAPMATCHED_TOPIOCQA_PATH")
+    if environment_path is None:
+        return None
+    return Path(environment_path)
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as data_file:
+        for block in iter(lambda: data_file.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _git_revision() -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    revision = result.stdout.strip()
+    return revision or None
 
 
 if __name__ == "__main__":

@@ -194,7 +194,8 @@ context are separate outputs.
 The evaluation harness reports nDCG@3/5 and Recall@k separately for ambiguous
 follow-up turns and sharp standalone turns. It includes pointwise, history
 concatenation, Maximal Marginal Relevance, and resolved-query baselines, plus
-conversation-level percentile bootstrap confidence intervals.
+conversation-level percentile bootstrap confidence intervals. Method deltas use
+paired resampling of the same conversations.
 
 ```console
 python -m mapmatched.eval \
@@ -218,6 +219,14 @@ they are not a full-corpus or statistically conclusive benchmark. Structured
 section graphs also underperform on topic-switch-heavy TopiOCQA, an important
 negative result rather than a hidden one. See [`docs/eval.md`](docs/eval.md) for
 benchmark tiers, methodology, limitations, and reproduction commands.
+
+Reproduce the pinned n=25 MiniLM/kNN profile after downloading the validation
+split:
+
+```console
+python -m pip install -e ".[eval,graph,st]"
+./scripts/reproduce_topiocqa_n25.sh data/topiocqa_valid.jsonl
+```
 
 ## Design choices and limits
 

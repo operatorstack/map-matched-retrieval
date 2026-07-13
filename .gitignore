@@ -7,3 +7,5 @@ __pycache__/
 build/
 dist/
 eval-report.json
+data/
+reports/

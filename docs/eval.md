@@ -1,13 +1,14 @@
 # Evaluation harness
 
 Map-matched retrieval makes a narrow claim: it should lift **underspecified
-follow-up turns** without materially harming **sharp standalone turns**. M2 adds
-an optional evaluation harness behind `pip install map-matched-retrieval[eval]`.
+follow-up turns** without materially harming **sharp standalone turns**. The
+evaluation harness measures that claim without making conversational RAG the
+library's API boundary.
 
 ## Install
 
 ```console
-pip install map-matched-retrieval[eval,graph]
+python -m pip install -e ".[eval,graph,st]"
 ```
 
 The harness uses NumPy for kNN graph construction and optional Hugging Face /
@@ -61,18 +62,26 @@ best map-matched configuration against the β=0 pointwise baseline:
 
 ### TopiOCQA (micro)
 
+Download `data/topiocqa_valid.jsonl` from the
+[TopiOCQA dataset repository](https://huggingface.co/datasets/McGill-NLP/TopiOCQA),
+then run the pinned profile:
+
 ```console
-# download a split first (HF datasets dropped the custom dataset script):
-#   https://huggingface.co/datasets/McGill-NLP/TopiOCQA -> data/topiocqa_valid.jsonl
-python -m mapmatched.eval --benchmark topiocqa \
-    --data-path topiocqa_valid.jsonl --conversation-limit 25 \
-    --embedder sentence-transformers --graph-source section --ranking-mode full
+./scripts/reproduce_topiocqa_n25.sh data/topiocqa_valid.jsonl
 ```
 
 Reads the released JSON/JSONL directly (`--data-path` or `MAPMATCHED_TOPIOCQA_PATH`)
-and builds a micro-corpus from gold passages and additional answers. The section
-graph keys on the Wikipedia article title. Note TopiOCQA is topic-switch heavy,
-so it stresses the standalone (H0) side as much as the follow-up (H1) side.
+and builds a micro-corpus from gold passages and additional answers. The pinned
+profile selects the first 25 conversations in file order, records the file
+SHA-256 and selected IDs, uses `sentence-transformers/all-MiniLM-L6-v2`, a
+10-neighbor kNN graph, full ranking, a 100-candidate window, and 1,000 bootstrap
+draws with seed 42.
+
+TopiOCQA is topic-switch heavy, so it stresses the standalone side as much as the
+follow-up side. It is licensed
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/); the
+dataset is not redistributed by this repository. These runs are micro-corpus
+experiments, not full-Wikipedia retrieval.
 
 ### TREC CAsT 2019 (micro)
 
@@ -100,17 +109,20 @@ the follow-up-lift claim than TopiOCQA's topic switches.
 ## Bootstrap confidence intervals
 
 Use `--bootstrap-samples` to resample conversations and compute 95% percentile
-CIs for nDCG@3 on each slice. Disabled by default (`0`) for fast smoke runs;
-use `1000` for publishable numbers. `--bootstrap-seed` (default 42) keeps runs
-reproducible.
+CIs for nDCG@3 on each slice. Method comparisons resample the same conversations
+for treatment and pointwise retrieval, producing a paired CI on the nDCG@3
+delta. Disabled by default (`0`) for fast smoke runs; use `1000` for reported
+numbers. `--bootstrap-seed` (default 42) keeps runs reproducible.
 
 ```console
 python -m mapmatched.eval --benchmark synthetic \
     --bootstrap-samples 200 --output eval-report.json
 ```
 
-The markdown table adds an `nDCG@3 95% CI` column; JSON reports include
-`ndcg_at_3_ci` as `[lower, upper]` on each slice.
+The markdown table includes absolute and paired-delta 95% CIs. JSON reports
+include method-level `ndcg_at_3_ci` values and explicit `comparisons` with
+`ndcg_at_3_delta_ci`. The claim gate remains based on configured point-estimate
+thresholds; a paired interval excluding zero is the uncertainty check.
 
 ## Reproducing headline numbers
 
@@ -118,12 +130,11 @@ The README headline table uses **Tier B dev-slice** results with a
 caller-supplied embedder. The built-in `DeterministicHashEmbedder` is for tests
 and smoke runs only.
 
-For publishable numbers:
-
-1. Choose an embedding model and implement `QueryEmbedder` / `PassageEmbedder`.
-2. Build a micro-corpus or full corpus index.
-3. Run the ablation grid and record JSON + markdown output.
-4. Paste the markdown table into README with the embedder and tier noted.
+The TopiOCQA script writes full JSON and markdown reports under
+`reports/topiocqa-n25-minilm-knn-full/`. Generated reports are ignored because
+they contain machine-run detail; committed headline values must include the
+profile, dataset SHA-256, model, graph settings, conversation count, and paired
+interval.
 
 ## Output
 

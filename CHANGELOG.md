@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+- Add paired conversation-level bootstrap intervals for method nDCG@3 deltas,
+  preserve conversation IDs in reports, and fix the aggregate `all`-slice
+  bootstrap interval.
+- Add a pinned TopiOCQA n=25 MiniLM/kNN reproduction script with dataset
+  checksum, selected conversation IDs, model, graph, package, and git provenance.
 - Bootstrap confidence intervals: conversation-level percentile bootstrap for
   nDCG@3 per slice (`--bootstrap-samples`, default 0; use 1000 for publishable
   runs). CIs appear in JSON reports and the markdown table.
