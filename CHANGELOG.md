@@ -47,7 +47,8 @@ All notable changes to this project are documented here.
 - Fix the TREC CAsT 2019 loader: use the correct ir-datasets id
   `trec-cast/v1/2019/judged`, load real passage text from the collection
   `docs_store()` (previously the doc id was used as the text), read
-  `raw_utterance` / `manual_rewritten_utterance`, and populate resolved queries.
+  `raw_utterance` / `manual_rewritten_utterance`, populate resolved queries,
+  install TREC CAR support, and stop retrying a failed docstore build per passage.
 - Add an optional `SentenceTransformerEmbedder` (extra: `[st]`) and an
   `--embedder {hash,sentence-transformers}` CLI flag so eval runs can use real
   semantic embeddings instead of the deterministic hash fixture. Both embedders

@@ -89,6 +89,7 @@ def load_cast2019_micro() -> tuple[tuple[EvalConversation, ...], tuple[Passage, 
             try:
                 doc = docs_store.get(doc_id)
             except Exception:
+                docs_store = None
                 doc = None
             if doc is not None:
                 text = _first_text_attr(doc, ("text", "body"))
