@@ -23,18 +23,15 @@ dependencies = []
 
 [project.optional-dependencies]
 graph = [
-  "numpy>=2.2.6; python_version < '3.11'",
-  "numpy>=2.5.1; python_version >= '3.11'",
+  "numpy>=2.2.6",
 ]
 faiss = [
   "faiss-cpu>=1.14.3",
-  "numpy>=2.2.6; python_version < '3.11'",
-  "numpy>=2.5.1; python_version >= '3.11'",
+  "numpy>=2.2.6",
 ]
 eval = [
   "ir-datasets>=0.5.11",
-  "numpy>=2.2.6; python_version < '3.11'",
-  "numpy>=2.5.1; python_version >= '3.11'",
+  "numpy>=2.2.6",
 ]
 gemini = [
   "google-genai>=2.11.0",
