@@ -165,12 +165,13 @@ class KNNGraph(InMemoryCorpusGraph):
         dijkstra = getattr(self._scipy_csgraph, "dijkstra", None)
         if not callable(dijkstra):
             return None
-        return dijkstra(
+        distances: object = dijkstra(
             self._sparse_adjacency,
             directed=self._directed,
             indices=source_index,
             limit=cutoff,
         )
+        return distances
 
     def _bounded_distances(self, source: str, cutoff: float) -> dict[str, float]:
         if self._sparse_adjacency is None or self._scipy_csgraph is None:
