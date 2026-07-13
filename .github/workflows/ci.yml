@@ -20,8 +20,8 @@ jobs:
     name: base package
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630cea06102a548caf8bcb44f
-      - uses: actions/setup-python@8d9ed9acaa204a42485415563790864b2b171d23
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install
@@ -44,8 +44,8 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630cea06102a548caf8bcb44f
-      - uses: actions/setup-python@8d9ed9acaa204a42485415563790864b2b171d23
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -61,8 +61,8 @@ jobs:
     name: quality
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630cea06102a548caf8bcb44f
-      - uses: actions/setup-python@8d9ed9acaa204a42485415563790864b2b171d23
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -89,8 +89,8 @@ jobs:
     name: cmg parity
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630cea06102a548caf8bcb44f
-      - uses: actions/setup-python@8d9ed9acaa204a42485415563790864b2b171d23
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -110,8 +110,8 @@ jobs:
     name: eval offline
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630cea06102a548caf8bcb44f
-      - uses: actions/setup-python@8d9ed9acaa204a42485415563790864b2b171d23
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
