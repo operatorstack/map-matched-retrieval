@@ -31,6 +31,8 @@ All notable changes to this project are documented here.
   rate-limit/server failures with bounded exponential backoff.
 - Prefetch and pace Gemini rewrites before local retrieval evaluation so
   low-request-rate API keys can resume without repeating graph computation.
+- Pin the CAsT reproduction script to the available `gemini-3-flash-preview`
+  after sustained capacity errors from `gemini-3.5-flash`.
 - Publish the reproducible TopiOCQA n=25 MiniLM/kNN micro-corpus result:
   map-matched β=1.0 lifts follow-up nDCG@3 by `+0.084` with paired 95% CI
   `[+0.046, +0.128]`; two runs produced byte-identical reports.
