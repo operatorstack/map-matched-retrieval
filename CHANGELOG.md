@@ -35,6 +35,8 @@ All notable changes to this project are documented here.
   sustained capacity errors from the 3.5 Flash and 3 Flash preview models.
 - Cap individual Gemini HTTP attempts at 30 seconds and extend bounded retries
   for occasional capacity stalls during long prefetch runs.
+- Omit the resolved-query oracle when a benchmark does not provide resolved
+  turns instead of silently evaluating raw queries under an oracle label.
 - Publish the reproducible TopiOCQA n=25 MiniLM/kNN micro-corpus result:
   map-matched β=1.0 lifts follow-up nDCG@3 by `+0.084` with paired 95% CI
   `[+0.046, +0.128]`; two runs produced byte-identical reports.

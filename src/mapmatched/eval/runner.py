@@ -114,9 +114,10 @@ def run_method_on_conversation(
             rank_full_corpus(provider, rewritten_query) for rewritten_query in rewritten_queries
         ), tuple(None for _ in queries)
     if method.name == "resolved_oracle":
+        if any(turn.resolved_query is None for turn in conversation.turns):
+            raise ValueError("resolved_oracle requires a resolved query for every turn")
         oracle_queries = tuple(
-            turn.resolved_query if turn.resolved_query is not None else turn.query
-            for turn in conversation.turns
+            turn.resolved_query for turn in conversation.turns if turn.resolved_query is not None
         )
         return tuple(rank_full_corpus(provider, query) for query in oracle_queries), tuple(
             None for _ in queries

@@ -1,3 +1,5 @@
+import pytest
+
 from mapmatched.eval import (
     DeterministicHashEmbedder,
     EvalConfig,
@@ -49,3 +51,26 @@ def test_synthetic_eval_runs_end_to_end() -> None:
         if slice_metrics.slice_name == "follow_up"
     )
     assert follow_up.ndcg_at_3_delta_ci is not None
+
+
+def test_resolved_oracle_requires_every_turn_to_be_resolved() -> None:
+    conversations, passages = load_synthetic_fixture()
+    embedder = DeterministicHashEmbedder()
+
+    with pytest.raises(ValueError, match="resolved query for every turn"):
+        run_eval(
+            conversations=conversations,
+            passages=passages,
+            embedder=embedder,
+            methods=(MethodSpec(name="resolved_oracle"),),
+            config=MapMatchedMethodConfig(candidate_limit=4),
+            eval_config=EvalConfig(
+                benchmark="synthetic",
+                tier="synthetic",
+                embedder_name=embedder.name,
+                recall_k=10,
+                entropy_threshold=None,
+                standalone_tolerance=0.02,
+                follow_up_min_delta=0.0,
+            ),
+        )

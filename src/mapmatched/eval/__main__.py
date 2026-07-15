@@ -209,7 +209,15 @@ def main(argv: list[str] | None = None) -> int:
         eval_config=eval_config,
         candidate_limit=args.candidate_limit,
         include_gemini_rewrite=args.include_gemini_rewrite,
-        include_resolved_oracle=args.include_resolved_oracle or args.benchmark == "cast2019",
+        include_resolved_oracle=args.include_resolved_oracle
+        or (
+            args.benchmark == "cast2019"
+            and all(
+                turn.resolved_query is not None
+                for conversation in conversations
+                for turn in conversation.turns
+            )
+        ),
         query_rewriter=query_rewriter,
     )
     args.output.write_text(render_json(report), encoding="utf-8")
