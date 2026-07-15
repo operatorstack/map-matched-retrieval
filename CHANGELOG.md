@@ -37,6 +37,11 @@ All notable changes to this project are documented here.
   for occasional capacity stalls during long prefetch runs.
 - Omit the resolved-query oracle when a benchmark does not provide resolved
   turns instead of silently evaluating raw queries under an oracle label.
+- Publish the CAsT 2019 judged-passage result: map-matched β=1.0 lifts follow-up
+  nDCG@3 by `+0.027` (`[+0.008, +0.049]`), while Gemini Flash-Lite rewriting
+  lifts it by `+0.191` (`[+0.078, +0.296]`).
+- Correct the development `build` dependency floor to the available 1.5.0
+  release.
 - Publish the reproducible TopiOCQA n=25 MiniLM/kNN micro-corpus result:
   map-matched β=1.0 lifts follow-up nDCG@3 by `+0.084` with paired 95% CI
   `[+0.046, +0.128]`; two runs produced byte-identical reports.
