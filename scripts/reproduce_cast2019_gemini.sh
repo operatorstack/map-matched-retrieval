@@ -2,9 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROFILE="cast2019-gemini35flash-minilm-knn-full"
+GEMINI_MODEL="${MAPMATCHED_GEMINI_MODEL:-gemini-3.1-flash-lite}"
+MODEL_SLUG="${GEMINI_MODEL//\//-}"
+PROFILE="cast2019-$MODEL_SLUG-minilm-knn-full"
 REPORT_DIR="${MAPMATCHED_REPORT_DIR:-$ROOT_DIR/reports/$PROFILE}"
-GEMINI_MODEL="${MAPMATCHED_GEMINI_MODEL:-gemini-3.5-flash}"
 
 if [[ -z "${GEMINI_API_KEY:-}" ]]; then
   echo "GEMINI_API_KEY must be set" >&2
@@ -16,6 +17,15 @@ mkdir -p "$REPORT_DIR"
 export CUDA_VISIBLE_DEVICES=""
 export PYTHONHASHSEED=0
 export TOKENIZERS_PARALLELISM=false
+
+python3 -m mapmatched.eval \
+  --benchmark cast2019 \
+  --conversation-limit 50 \
+  --include-gemini-rewrite \
+  --gemini-model "$GEMINI_MODEL" \
+  --gemini-rewrite-cache "$REPORT_DIR/rewrites.json" \
+  --gemini-min-request-interval 13 \
+  --gemini-prefetch-only
 
 python3 -m mapmatched.eval \
   --profile "$PROFILE" \
@@ -33,6 +43,8 @@ python3 -m mapmatched.eval \
   --bootstrap-seed 42 \
   --include-gemini-rewrite \
   --gemini-model "$GEMINI_MODEL" \
+  --gemini-rewrite-cache "$REPORT_DIR/rewrites.json" \
+  --gemini-min-request-interval 13 \
   --output "$REPORT_DIR/report.json" \
   --markdown-output "$REPORT_DIR/report.md"
 

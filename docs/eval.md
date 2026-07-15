@@ -58,7 +58,7 @@ best map-matched configuration against the β=0 pointwise baseline:
 | `history_concat` | Dense retrieval over concatenated query history |
 | `gemini_rewrite` | Gemini rewrites each turn into a standalone query before dense retrieval |
 | `maximal_marginal_relevance` | Per-turn MMR re-ranking (not map-matched retrieval) |
-| `resolved_oracle` | CAsT resolved utterances (upper bound) |
+| `resolved_oracle` | Caller-supplied resolved utterances (upper bound) |
 
 ## Benchmarks
 
@@ -116,13 +116,21 @@ Without the collection the loader degrades to using doc ids as passage text
 the follow-up-lift claim than TopiOCQA's topic switches.
 
 The script adds `gemini_rewrite` to the normal ablation grid. It sends each raw
-utterance and its prior user utterances to `gemini-3.5-flash` with minimal
+utterance and its prior user utterances to `gemini-3.1-flash-lite` with minimal
 thinking, retrieves with the returned standalone query, and compares it with both
-pointwise retrieval and CAsT's manual `resolved_oracle`. `GEMINI_API_KEY` is read
+pointwise retrieval and a `resolved_oracle` when every turn supplies a resolved
+query. The ir-datasets CAsT 2019 judged query objects currently expose raw
+utterances but not manual rewrites, so the reproduction profile omits the oracle
+instead of silently duplicating pointwise retrieval. `GEMINI_API_KEY` is read
 from the environment and is never written to reports. Reports record the Gemini
 model and prompt version. The baseline is opt-in because it makes one paid,
 networked model request per selected turn; `--conversation-limit` bounds those
 requests. Hosted-model output is not immutable across model revisions.
+Successful rewrites are checkpointed in `rewrites.json`, so rerunning the profile
+resumes after transient API failures instead of repeating completed requests.
+The reproduction script prefetches rewrites at a 13-second interval before
+starting retrieval evaluation, which also supports keys constrained to five
+requests per minute.
 
 ## Graph source and ranking mode
 

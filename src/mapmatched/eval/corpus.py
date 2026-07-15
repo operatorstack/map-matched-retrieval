@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import heapq
+import importlib
+from collections import OrderedDict
 from collections.abc import Sequence
 
 from mapmatched import KNNGraph, ScoredCandidate
 from mapmatched.graph import InMemoryCorpusGraph
 
-from .embedder import PassageEmbedder, QueryEmbedder, dot_product
+from .embedder import PassageEmbedder, QueryEmbedder
 from .types import Passage
+
+_SCORE_CACHE_SIZE = 512
 
 
 class BruteForceProvider:
@@ -21,10 +26,24 @@ class BruteForceProvider:
             raise ValueError("passage_ids must contain at least one ID")
         if len(ids) != len(passage_embeddings):
             raise ValueError("passage_ids and passage_embeddings length mismatch")
+        try:
+            numpy = importlib.import_module("numpy")
+        except ImportError as error:
+            raise ImportError(
+                "BruteForceProvider requires the 'eval' extra: "
+                "pip install 'map-matched-retrieval[eval]'"
+            ) from error
+        embedding_matrix = numpy.asarray(passage_embeddings, dtype="float64")
+        shape = getattr(embedding_matrix, "shape", None)
+        if not isinstance(shape, tuple) or len(shape) != 2:
+            raise ValueError("passage_embeddings must be a two-dimensional matrix")
         self._passage_ids = ids
-        self._passage_embeddings = tuple(tuple(values) for values in passage_embeddings)
+        self._embedding_matrix = embedding_matrix
+        self._embedding_dimension = shape[1]
+        self._numpy = numpy
         self._embed_query = embed_query
         self._query_embedding_cache: dict[str, tuple[float, ...]] = {}
+        self._score_cache: OrderedDict[str, tuple[float, ...]] = OrderedDict()
 
     @property
     def passage_count(self) -> int:
@@ -37,21 +56,43 @@ class BruteForceProvider:
         if query_embedding is None:
             query_embedding = tuple(self._embed_query.embed_query(query))
             self._query_embedding_cache[query] = query_embedding
-        scored = [
-            (
-                dot_product(query_embedding, passage_embedding),
-                passage_id,
+        if len(query_embedding) != self._embedding_dimension:
+            raise ValueError("query and passage embedding dimensions must match")
+        scores = self._score_cache.get(query)
+        if scores is None:
+            query_vector = self._numpy.asarray(query_embedding, dtype="float64")
+            raw_scores = self._embedding_matrix @ query_vector
+            tolist = getattr(raw_scores, "tolist", None)
+            if not callable(tolist):
+                raise TypeError("NumPy returned invalid retrieval scores")
+            score_values = tolist()
+            if not isinstance(score_values, list):
+                raise TypeError("NumPy returned invalid retrieval scores")
+            scores = tuple(float(score) for score in score_values)
+            self._score_cache[query] = scores
+            if len(self._score_cache) > _SCORE_CACHE_SIZE:
+                self._score_cache.popitem(last=False)
+        else:
+            self._score_cache.move_to_end(query)
+        effective_limit = min(limit, len(self._passage_ids))
+
+        def ranking_key(index: int) -> tuple[float, str]:
+            return -scores[index], self._passage_ids[index]
+
+        if effective_limit == len(self._passage_ids):
+            ranked_indices = sorted(range(len(self._passage_ids)), key=ranking_key)
+        else:
+            ranked_indices = heapq.nsmallest(
+                effective_limit,
+                range(len(self._passage_ids)),
+                key=ranking_key,
             )
-            for passage_id, passage_embedding in zip(
-                self._passage_ids,
-                self._passage_embeddings,
-                strict=True,
-            )
-        ]
-        scored.sort(key=lambda item: (-item[0], item[1]))
         return [
-            ScoredCandidate(chunk_id=passage_id, score=score)
-            for score, passage_id in scored[:limit]
+            ScoredCandidate(
+                chunk_id=self._passage_ids[index],
+                score=scores[index],
+            )
+            for index in ranked_indices
         ]
 
 

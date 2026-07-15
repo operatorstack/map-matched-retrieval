@@ -54,6 +54,103 @@ def test_create_gemini_query_rewriter_requires_api_key(
         create_gemini_query_rewriter()
 
 
+def test_gemini_query_rewriter_retries_transient_errors() -> None:
+    attempts = 0
+    delays: list[float] = []
+
+    class TransientError(Exception):
+        status_code = 503
+
+    class Response:
+        text = "standalone query"
+
+    def generate_content(**request: object) -> object:
+        del request
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise TransientError
+        return Response()
+
+    rewriter = GeminiQueryRewriter(
+        generate_content=generate_content,
+        config=GeminiRewriteConfig(
+            model="test-model",
+            initial_retry_delay=1.0,
+        ),
+        sleep=delays.append,
+    )
+
+    assert rewriter.rewrite(history=(), query="query") == "standalone query"
+    assert attempts == 3
+    assert delays == [1.0, 2.0]
+
+
+def test_gemini_query_rewriter_checkpoints_completed_rewrites(tmp_path: Path) -> None:
+    cache_path = tmp_path / "rewrites.json"
+    request_count = 0
+
+    class Response:
+        text = "standalone query"
+
+    def generate_content(**request: object) -> object:
+        del request
+        nonlocal request_count
+        request_count += 1
+        return Response()
+
+    first = GeminiQueryRewriter(
+        generate_content=generate_content,
+        config=GeminiRewriteConfig(model="test-model"),
+        cache_path=cache_path,
+    )
+    assert first.rewrite(history=("context",), query="follow up") == "standalone query"
+    second = GeminiQueryRewriter(
+        generate_content=generate_content,
+        config=GeminiRewriteConfig(model="test-model"),
+        cache_path=cache_path,
+    )
+
+    assert second.rewrite(history=("context",), query="follow up") == "standalone query"
+    assert request_count == 1
+    assert json.loads(cache_path.read_text(encoding="utf-8"))
+
+
+def test_gemini_query_rewriter_paces_requests() -> None:
+    delays: list[float] = []
+    current_time = 0.0
+
+    class Response:
+        text = "standalone query"
+
+    def generate_content(**request: object) -> object:
+        del request
+        return Response()
+
+    def sleep(delay: float) -> None:
+        nonlocal current_time
+        delays.append(delay)
+        current_time += delay
+
+    def monotonic() -> float:
+        return current_time
+
+    rewriter = GeminiQueryRewriter(
+        generate_content=generate_content,
+        config=GeminiRewriteConfig(
+            model="test-model",
+            minimum_request_interval=13.0,
+        ),
+        sleep=sleep,
+        monotonic=monotonic,
+    )
+
+    rewriter.rewrite(history=(), query="first")
+    rewriter.rewrite(history=(), query="second")
+
+    assert delays == [13.0]
+
+
 def test_gemini_rewrite_runs_end_to_end_with_paired_comparison() -> None:
     conversations, passages = load_synthetic_fixture()
     embedder = DeterministicHashEmbedder()
@@ -93,6 +190,29 @@ def test_gemini_rewrite_runs_end_to_end_with_paired_comparison() -> None:
     assert all(slice_metrics.ndcg_at_3_delta_ci is not None for slice_metrics in comparison.slices)
 
 
+def test_cli_prefetches_gemini_rewrites_without_evaluation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    conversations, _ = load_synthetic_fixture()
+    rewriter = RecordingQueryRewriter()
+    monkeypatch.setattr(
+        "mapmatched.eval.__main__.create_gemini_query_rewriter",
+        lambda *, model, cache_path, minimum_request_interval: rewriter,
+    )
+
+    exit_code = main(
+        [
+            "--benchmark",
+            "synthetic",
+            "--include-gemini-rewrite",
+            "--gemini-prefetch-only",
+        ]
+    )
+
+    assert exit_code == 0
+    assert len(rewriter.calls) == sum(len(conversation.turns) for conversation in conversations)
+
+
 def test_cli_records_gemini_rewrite_metadata(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -100,9 +220,10 @@ def test_cli_records_gemini_rewrite_metadata(
     rewriter = RecordingQueryRewriter()
     monkeypatch.setattr(
         "mapmatched.eval.__main__.create_gemini_query_rewriter",
-        lambda *, model: rewriter,
+        lambda *, model, cache_path, minimum_request_interval: rewriter,
     )
     output_path = tmp_path / "report.json"
+    cache_path = tmp_path / "rewrites.json"
 
     exit_code = main(
         [
@@ -113,6 +234,8 @@ def test_cli_records_gemini_rewrite_metadata(
             "--include-gemini-rewrite",
             "--gemini-model",
             "test-model",
+            "--gemini-rewrite-cache",
+            str(cache_path),
             "--candidate-limit",
             "4",
             "--output",
@@ -125,4 +248,5 @@ def test_cli_records_gemini_rewrite_metadata(
     assert payload["config"]["query_rewrite_provider"] == "gemini"
     assert payload["config"]["query_rewrite_model"] == "test-model"
     assert payload["config"]["query_rewrite_prompt_version"] == "cast-standalone-v1"
+    assert payload["config"]["query_rewrite_cache_filename"] == "rewrites.json"
     assert any(method["method_name"] == "gemini_rewrite" for method in payload["methods"])

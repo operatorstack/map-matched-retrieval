@@ -17,6 +17,31 @@ All notable changes to this project are documented here.
   checksum, selected conversation IDs, model, graph, package, and git provenance.
 - Cache repeated query embeddings in the eval provider and reuse one bounded
   shortest-path search across all targets for a graph source.
+- Build embedding kNN graphs with blockwise NumPy top-k selection instead of
+  Python-sorting every corpus pair, keeping large judged corpora tractable.
+- Bound graph shortest-path caching by source and bypass graph searches when
+  `transition_weight=0`, preventing pointwise evaluation from materializing an
+  all-pairs distance cache.
+- Accelerate `KNNGraph` shortest paths with SciPy's compiled sparse-graph
+  implementation and compact dense-distance cache when available while
+  retaining the standard-library fallback.
+- Vectorize evaluation retrieval scores with NumPy and retain a bounded query
+  score cache, removing per-dimension Python loops from full-corpus baselines.
+- Checkpoint Gemini rewrites after each successful request and retry transient
+  rate-limit/server failures with bounded exponential backoff.
+- Prefetch and pace Gemini rewrites before local retrieval evaluation so
+  low-request-rate API keys can resume without repeating graph computation.
+- Pin the CAsT baseline to stable, high-volume `gemini-3.1-flash-lite` after
+  sustained capacity errors from the 3.5 Flash and 3 Flash preview models.
+- Cap individual Gemini HTTP attempts at 30 seconds and extend bounded retries
+  for occasional capacity stalls during long prefetch runs.
+- Omit the resolved-query oracle when a benchmark does not provide resolved
+  turns instead of silently evaluating raw queries under an oracle label.
+- Publish the CAsT 2019 judged-passage result: map-matched β=1.0 lifts follow-up
+  nDCG@3 by `+0.027` (`[+0.008, +0.049]`), while Gemini Flash-Lite rewriting
+  lifts it by `+0.191` (`[+0.078, +0.296]`).
+- Correct the development `build` dependency floor to the available 1.5.0
+  release.
 - Publish the reproducible TopiOCQA n=25 MiniLM/kNN micro-corpus result:
   map-matched β=1.0 lifts follow-up nDCG@3 by `+0.084` with paired 95% CI
   `[+0.046, +0.128]`; two runs produced byte-identical reports.
@@ -47,7 +72,8 @@ All notable changes to this project are documented here.
 - Fix the TREC CAsT 2019 loader: use the correct ir-datasets id
   `trec-cast/v1/2019/judged`, load real passage text from the collection
   `docs_store()` (previously the doc id was used as the text), read
-  `raw_utterance` / `manual_rewritten_utterance`, and populate resolved queries.
+  `raw_utterance` / `manual_rewritten_utterance`, populate resolved queries,
+  install TREC CAR support, and stop retrying a failed docstore build per passage.
 - Add an optional `SentenceTransformerEmbedder` (extra: `[st]`) and an
   `--embedder {hash,sentence-transformers}` CLI flag so eval runs can use real
   semantic embeddings instead of the deterministic hash fixture. Both embedders

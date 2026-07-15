@@ -233,6 +233,25 @@ python -m pip install -e ".[eval,graph,st]"
 ./scripts/reproduce_topiocqa_n25.sh data/topiocqa_valid.jsonl
 ```
 
+The TREC CAsT 2019 judged-passage profile covers 20 topics, 173 turns, and
+21,726 judged passages. It uses the same MiniLM/kNN/full-ranking setup plus a
+checkpointed `gemini-3.1-flash-lite` rewrite baseline:
+
+| Slice | Method | nDCG@3 | Delta vs pointwise | Paired delta 95% CI |
+| --- | --- | ---: | ---: | ---: |
+| Follow-up | Pointwise | 0.325 | +0.000 | — |
+| Follow-up | Map-matched β=0.5 | 0.335 | +0.009 | [-0.006, +0.027] |
+| Follow-up | Map-matched β=1.0 | 0.352 | +0.027 | [+0.008, +0.049] |
+| Follow-up | Gemini rewrite | 0.516 | +0.191 | [+0.078, +0.296] |
+| Standalone | Map-matched β=1.0 | 0.216 | +0.015 | [+0.004, +0.027] |
+| Standalone | Gemini rewrite | 0.457 | +0.257 | [+0.187, +0.325] |
+
+These are judged-passage micro-corpus results, not full-corpus retrieval
+evidence. The ir-datasets CAsT query objects do not expose manual rewrites, so
+the profile does not report a resolved-query oracle. See the
+[`committed CAsT result`](results/cast2019_gemini_flash_lite_knn.md) for full
+provenance and limitations.
+
 ## Design choices and limits
 
 - Per-turn z-score normalization is the safe default; `center` and `none` are

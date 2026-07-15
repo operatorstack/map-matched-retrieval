@@ -57,6 +57,44 @@ def test_tie_breaking_is_stable_across_input_order() -> None:
             assert first.distance(source, target) == second.distance(source, target)
 
 
+def test_knn_graph_connects_neighbors_across_similarity_blocks() -> None:
+    chunk_ids = [f"chunk-{index:03d}" for index in range(258)]
+    embeddings = [[1.0, index / 1000.0] for index in range(258)]
+
+    graph = KNNGraph.from_embeddings(
+        chunk_ids,
+        embeddings,
+        neighbor_count=1,
+        maximum_distance=3.0,
+    )
+
+    assert graph.distance("chunk-255", "chunk-256") < graph.maximum_distance
+
+
+def test_sparse_and_standard_library_shortest_paths_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    chunk_ids = ["a", "b", "c", "d"]
+    embeddings = [[1.0, 0.0], [0.9, 0.1], [0.1, 0.9], [0.0, 1.0]]
+    accelerated = KNNGraph.from_embeddings(
+        chunk_ids,
+        embeddings,
+        neighbor_count=1,
+    )
+    monkeypatch.setattr(knn_module, "_load_scipy_sparse", lambda: None)
+    standard_library = KNNGraph.from_embeddings(
+        chunk_ids,
+        embeddings,
+        neighbor_count=1,
+    )
+
+    for source in chunk_ids:
+        for target in chunk_ids:
+            assert accelerated.distance(source, target) == pytest.approx(
+                standard_library.distance(source, target)
+            )
+
+
 @pytest.mark.parametrize(
     ("chunk_ids", "embeddings", "message"),
     [

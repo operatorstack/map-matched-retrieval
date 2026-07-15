@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import importlib
 import math
-from collections.abc import Sequence
+from collections import OrderedDict
+from collections.abc import Iterable, Sequence
 from types import ModuleType
 
 from .graph import GraphEdge, InMemoryCorpusGraph
+
+_SIMILARITY_BLOCK_SIZE = 256
 
 
 class GraphDependencyUnavailableError(ImportError):
@@ -19,6 +22,16 @@ def _load_numpy() -> ModuleType:
         raise GraphDependencyUnavailableError(
             "KNNGraph requires the 'graph' extra: pip install 'map-matched-retrieval[graph]'"
         ) from error
+
+
+def _load_scipy_sparse() -> tuple[ModuleType, ModuleType] | None:
+    try:
+        return (
+            importlib.import_module("scipy.sparse"),
+            importlib.import_module("scipy.sparse.csgraph"),
+        )
+    except ImportError:
+        return None
 
 
 def _coerce_embedding_rows(
@@ -57,6 +70,127 @@ def _coerce_embedding_rows(
 
 
 class KNNGraph(InMemoryCorpusGraph):
+    def __init__(
+        self,
+        edges: Iterable[GraphEdge] = (),
+        *,
+        nodes: Iterable[str] = (),
+        directed: bool = False,
+        maximum_distance: float = 10.0,
+        distance_cache_size: int = 256,
+    ) -> None:
+        super().__init__(
+            edges,
+            nodes=nodes,
+            directed=directed,
+            maximum_distance=maximum_distance,
+            distance_cache_size=distance_cache_size,
+        )
+        self._ordered_nodes = tuple(sorted(self._adjacency))
+        self._node_indices = {chunk_id: index for index, chunk_id in enumerate(self._ordered_nodes)}
+        self._sparse_distance_cache: OrderedDict[str, object] = OrderedDict()
+        scipy_sparse = _load_scipy_sparse()
+        if scipy_sparse is None:
+            self._sparse_adjacency = None
+            self._scipy_csgraph = None
+            return
+        sparse, self._scipy_csgraph = scipy_sparse
+        rows: list[int] = []
+        columns: list[int] = []
+        distances: list[float] = []
+        for source_id, neighbors in self._adjacency.items():
+            source_index = self._node_indices[source_id]
+            for target_id, distance in neighbors.items():
+                rows.append(source_index)
+                columns.append(self._node_indices[target_id])
+                distances.append(distance)
+        csr_matrix = getattr(sparse, "csr_matrix", None)
+        if not callable(csr_matrix):
+            self._sparse_adjacency = None
+            self._scipy_csgraph = None
+            return
+        self._sparse_adjacency = csr_matrix(
+            (distances, (rows, columns)),
+            shape=(len(self._ordered_nodes), len(self._ordered_nodes)),
+        )
+
+    def distance(self, source_chunk_id: str, target_chunk_id: str) -> float:
+        if self._sparse_adjacency is None or self._scipy_csgraph is None:
+            return super().distance(source_chunk_id, target_chunk_id)
+        if not source_chunk_id or not target_chunk_id:
+            raise ValueError("distance chunk IDs must not be empty")
+        if source_chunk_id == target_chunk_id:
+            return 0.0
+        target_index = self._node_indices.get(target_chunk_id)
+        if target_index is None:
+            return self._maximum_distance
+        distances = self._cached_sparse_distances(source_chunk_id)
+        if distances is not None:
+            return self._sparse_distance_value(distances, target_index)
+        if not self._directed:
+            reverse_distances = self._cached_sparse_distances(target_chunk_id)
+            source_index = self._node_indices.get(source_chunk_id)
+            if reverse_distances is not None and source_index is not None:
+                return self._sparse_distance_value(reverse_distances, source_index)
+        distances = self._compute_sparse_distances(source_chunk_id, self._maximum_distance)
+        if distances is None:
+            return self._maximum_distance
+        self._sparse_distance_cache[source_chunk_id] = distances
+        self._sparse_distance_cache.move_to_end(source_chunk_id)
+        if len(self._sparse_distance_cache) > self._distance_cache_size:
+            self._sparse_distance_cache.popitem(last=False)
+        return self._sparse_distance_value(distances, target_index)
+
+    def _cached_sparse_distances(self, source: str) -> object | None:
+        distances = self._sparse_distance_cache.get(source)
+        if distances is not None:
+            self._sparse_distance_cache.move_to_end(source)
+        return distances
+
+    def _sparse_distance_value(self, distances: object, target_index: int) -> float:
+        get_item = getattr(distances, "__getitem__", None)
+        if not callable(get_item):
+            return self._maximum_distance
+        distance = float(get_item(target_index))
+        if not math.isfinite(distance):
+            return self._maximum_distance
+        return min(distance, self._maximum_distance)
+
+    def _compute_sparse_distances(self, source: str, cutoff: float) -> object | None:
+        if self._sparse_adjacency is None or self._scipy_csgraph is None:
+            return None
+        source_index = self._node_indices.get(source)
+        if source_index is None:
+            return None
+        dijkstra = getattr(self._scipy_csgraph, "dijkstra", None)
+        if not callable(dijkstra):
+            return None
+        distances: object = dijkstra(
+            self._sparse_adjacency,
+            directed=self._directed,
+            indices=source_index,
+            limit=cutoff,
+        )
+        return distances
+
+    def _bounded_distances(self, source: str, cutoff: float) -> dict[str, float]:
+        if self._sparse_adjacency is None or self._scipy_csgraph is None:
+            return super()._bounded_distances(source, cutoff)
+        raw_distances = self._compute_sparse_distances(source, cutoff)
+        if raw_distances is None:
+            return {source: 0.0}
+        tolist = getattr(raw_distances, "tolist", None)
+        if not callable(tolist):
+            return super()._bounded_distances(source, cutoff)
+        values = tolist()
+        if not isinstance(values, list):
+            return super()._bounded_distances(source, cutoff)
+        return {
+            chunk_id: float(distance)
+            for chunk_id, distance in zip(self._ordered_nodes, values, strict=True)
+            if isinstance(distance, (int, float)) and math.isfinite(distance) and distance <= cutoff
+        }
+
     @classmethod
     def from_embeddings(
         cls,
@@ -88,50 +222,53 @@ class KNNGraph(InMemoryCorpusGraph):
                 "and no greater than maximum_distance"
             )
 
-        normalized = _coerce_embedding_rows(embeddings, len(ids))
-
+        numpy = _load_numpy()
+        normalized_rows = _coerce_embedding_rows(embeddings, len(ids))
+        normalized = numpy.asarray(normalized_rows, dtype="float64")
+        del normalized_rows
         edge_distances: dict[tuple[int, int], float] = {}
         effective_count = min(neighbor_count, max(0, len(ids) - 1))
-        for source_index in range(len(ids)):
-            ranked_neighbors = sorted(
-                (
+        for source_start in range(0, len(ids), _SIMILARITY_BLOCK_SIZE):
+            source_end = min(source_start + _SIMILARITY_BLOCK_SIZE, len(ids))
+            similarities = normalized[source_start:source_end] @ normalized.T
+            numpy.clip(similarities, -1.0, 1.0, out=similarities)
+            for block_index, source_index in enumerate(range(source_start, source_end)):
+                if effective_count == 0:
+                    continue
+                source_similarities = similarities[block_index]
+                source_similarities[source_index] = float("-inf")
+                partition = numpy.argpartition(
+                    -source_similarities,
+                    effective_count - 1,
+                )[:effective_count]
+                cutoff_similarity = float(numpy.min(source_similarities[partition]))
+                candidate_indices = numpy.flatnonzero(
+                    source_similarities >= cutoff_similarity
+                ).tolist()
+                ranked_neighbors = sorted(
                     (
-                        1.0
-                        - max(
-                            -1.0,
-                            min(
-                                1.0,
-                                sum(
-                                    source_value * target_value
-                                    for source_value, target_value in zip(
-                                        normalized[source_index],
-                                        normalized[target_index],
-                                        strict=True,
-                                    )
-                                ),
-                            ),
-                        ),
-                        ids[target_index],
-                        target_index,
+                        (
+                            1.0 - float(source_similarities[target_index]),
+                            ids[target_index],
+                            target_index,
+                        )
+                        for target_index in candidate_indices
+                    ),
+                    key=lambda item: (item[0], item[1]),
+                )
+                for cosine_distance, _, target_index in ranked_neighbors[:effective_count]:
+                    pair = (
+                        (source_index, target_index)
+                        if source_index < target_index
+                        else (target_index, source_index)
                     )
-                    for target_index in range(len(ids))
-                    if target_index != source_index
-                ),
-                key=lambda item: (item[0], item[1]),
-            )
-            for cosine_distance, _, target_index in ranked_neighbors[:effective_count]:
-                pair = (
-                    (source_index, target_index)
-                    if source_index < target_index
-                    else (target_index, source_index)
-                )
-                edge_distance = min(
-                    max(cosine_distance, minimum_edge_distance),
-                    maximum_distance,
-                )
-                existing = edge_distances.get(pair)
-                if existing is None or edge_distance < existing:
-                    edge_distances[pair] = edge_distance
+                    edge_distance = min(
+                        max(cosine_distance, minimum_edge_distance),
+                        maximum_distance,
+                    )
+                    existing = edge_distances.get(pair)
+                    if existing is None or edge_distance < existing:
+                        edge_distances[pair] = edge_distance
 
         edges = (
             GraphEdge(ids[source_index], ids[target_index], distance)

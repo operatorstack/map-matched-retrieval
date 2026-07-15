@@ -132,6 +132,7 @@ class EvalConfig:
     query_rewrite_provider: str | None = None
     query_rewrite_model: str | None = None
     query_rewrite_prompt_version: str | None = None
+    query_rewrite_cache_filename: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -157,6 +158,7 @@ class EvalConfig:
             "query_rewrite_provider": self.query_rewrite_provider,
             "query_rewrite_model": self.query_rewrite_model,
             "query_rewrite_prompt_version": self.query_rewrite_prompt_version,
+            "query_rewrite_cache_filename": self.query_rewrite_cache_filename,
         }
 
 

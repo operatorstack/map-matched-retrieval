@@ -24,13 +24,14 @@ dependencies = []
 [project.optional-dependencies]
 graph = [
   "numpy>=2.2.6",
+  "scipy>=1.15.3",
 ]
 faiss = [
   "faiss-cpu>=1.14.3",
   "numpy>=2.2.6",
 ]
 eval = [
-  "ir-datasets>=0.5.11",
+  "ir-datasets[car]>=0.5.11",
   "numpy>=2.2.6",
 ]
 gemini = [
@@ -40,7 +41,7 @@ st = [
   "sentence-transformers>=3.0",
 ]
 dev = [
-  "build>=1.5.1",
+  "build>=1.5.0",
   "mypy>=1.16",
   "pytest>=8.4",
   "ruff>=0.12",

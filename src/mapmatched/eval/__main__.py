@@ -14,6 +14,7 @@ from .baselines import (
     GEMINI_REWRITE_PROMPT_VERSION,
     ConversationQueryRewriter,
     create_gemini_query_rewriter,
+    rewrite_conversation_queries,
 )
 from .embedder import DeterministicHashEmbedder, SentenceTransformerEmbedder
 from .loaders import load_cast2019_micro, load_synthetic_fixture, load_topiocqa_micro
@@ -104,6 +105,23 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_GEMINI_MODEL,
         help="Gemini model used by --include-gemini-rewrite.",
     )
+    parser.add_argument(
+        "--gemini-rewrite-cache",
+        type=Path,
+        default=None,
+        help="JSON checkpoint for completed Gemini rewrites.",
+    )
+    parser.add_argument(
+        "--gemini-min-request-interval",
+        type=float,
+        default=0.0,
+        help="Minimum seconds between Gemini requests.",
+    )
+    parser.add_argument(
+        "--gemini-prefetch-only",
+        action="store_true",
+        help="Checkpoint Gemini rewrites without running retrieval evaluation.",
+    )
     return parser
 
 
@@ -131,13 +149,23 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     query_rewriter: ConversationQueryRewriter | None = None
     if args.include_gemini_rewrite:
-        query_rewriter = create_gemini_query_rewriter(model=args.gemini_model)
+        query_rewriter = create_gemini_query_rewriter(
+            model=args.gemini_model,
+            cache_path=args.gemini_rewrite_cache,
+            minimum_request_interval=args.gemini_min_request_interval,
+        )
     data_path = _effective_data_path(args.benchmark, args.data_path)
     conversations, passages = load_benchmark(
         args.benchmark,
         conversation_limit=args.conversation_limit,
         data_path=data_path,
     )
+    if args.gemini_prefetch_only:
+        if query_rewriter is None:
+            parser.error("--gemini-prefetch-only requires --include-gemini-rewrite")
+        for conversation in conversations:
+            rewrite_conversation_queries(conversation, query_rewriter)
+        return 0
     embedder: DeterministicHashEmbedder | SentenceTransformerEmbedder
     if args.embedder == "sentence-transformers":
         embedder = SentenceTransformerEmbedder(args.st_model)
@@ -170,6 +198,9 @@ def main(argv: list[str] | None = None) -> int:
         query_rewrite_prompt_version=GEMINI_REWRITE_PROMPT_VERSION
         if args.include_gemini_rewrite
         else None,
+        query_rewrite_cache_filename=args.gemini_rewrite_cache.name
+        if args.gemini_rewrite_cache is not None
+        else None,
     )
     report = run_ablation_grid(
         conversations=conversations,
@@ -178,7 +209,15 @@ def main(argv: list[str] | None = None) -> int:
         eval_config=eval_config,
         candidate_limit=args.candidate_limit,
         include_gemini_rewrite=args.include_gemini_rewrite,
-        include_resolved_oracle=args.include_resolved_oracle or args.benchmark == "cast2019",
+        include_resolved_oracle=args.include_resolved_oracle
+        or (
+            args.benchmark == "cast2019"
+            and all(
+                turn.resolved_query is not None
+                for conversation in conversations
+                for turn in conversation.turns
+            )
+        ),
         query_rewriter=query_rewriter,
     )
     args.output.write_text(render_json(report), encoding="utf-8")

@@ -67,6 +67,32 @@ def test_distance_reuses_single_source_shortest_paths() -> None:
     assert graph.search_count == 1
 
 
+def test_distance_source_cache_evicts_least_recently_used_search() -> None:
+    class CountingGraph(InMemoryCorpusGraph):
+        def __init__(self) -> None:
+            super().__init__(
+                [
+                    GraphEdge("a", "b", 1.0),
+                    GraphEdge("b", "c", 1.0),
+                    GraphEdge("c", "d", 1.0),
+                ],
+                directed=True,
+                distance_cache_size=2,
+            )
+            self.search_count = 0
+
+        def _bounded_distances(self, source: str, cutoff: float) -> dict[str, float]:
+            self.search_count += 1
+            return super()._bounded_distances(source, cutoff)
+
+    graph = CountingGraph()
+    assert graph.distance("a", "d") == 3.0
+    assert graph.distance("b", "d") == 2.0
+    assert graph.distance("c", "d") == 1.0
+    assert graph.distance("a", "d") == 3.0
+    assert graph.search_count == 4
+
+
 @pytest.mark.parametrize(
     ("method", "expected"),
     [
