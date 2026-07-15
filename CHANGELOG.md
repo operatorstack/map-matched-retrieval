@@ -29,6 +29,8 @@ All notable changes to this project are documented here.
   score cache, removing per-dimension Python loops from full-corpus baselines.
 - Checkpoint Gemini rewrites after each successful request and retry transient
   rate-limit/server failures with bounded exponential backoff.
+- Prefetch and pace Gemini rewrites before local retrieval evaluation so
+  low-request-rate API keys can resume without repeating graph computation.
 - Publish the reproducible TopiOCQA n=25 MiniLM/kNN micro-corpus result:
   map-matched β=1.0 lifts follow-up nDCG@3 by `+0.084` with paired 95% CI
   `[+0.046, +0.128]`; two runs produced byte-identical reports.

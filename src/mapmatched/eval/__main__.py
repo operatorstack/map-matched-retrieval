@@ -14,6 +14,7 @@ from .baselines import (
     GEMINI_REWRITE_PROMPT_VERSION,
     ConversationQueryRewriter,
     create_gemini_query_rewriter,
+    rewrite_conversation_queries,
 )
 from .embedder import DeterministicHashEmbedder, SentenceTransformerEmbedder
 from .loaders import load_cast2019_micro, load_synthetic_fixture, load_topiocqa_micro
@@ -110,6 +111,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="JSON checkpoint for completed Gemini rewrites.",
     )
+    parser.add_argument(
+        "--gemini-min-request-interval",
+        type=float,
+        default=0.0,
+        help="Minimum seconds between Gemini requests.",
+    )
+    parser.add_argument(
+        "--gemini-prefetch-only",
+        action="store_true",
+        help="Checkpoint Gemini rewrites without running retrieval evaluation.",
+    )
     return parser
 
 
@@ -140,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
         query_rewriter = create_gemini_query_rewriter(
             model=args.gemini_model,
             cache_path=args.gemini_rewrite_cache,
+            minimum_request_interval=args.gemini_min_request_interval,
         )
     data_path = _effective_data_path(args.benchmark, args.data_path)
     conversations, passages = load_benchmark(
@@ -147,6 +160,12 @@ def main(argv: list[str] | None = None) -> int:
         conversation_limit=args.conversation_limit,
         data_path=data_path,
     )
+    if args.gemini_prefetch_only:
+        if query_rewriter is None:
+            parser.error("--gemini-prefetch-only requires --include-gemini-rewrite")
+        for conversation in conversations:
+            rewrite_conversation_queries(conversation, query_rewriter)
+        return 0
     embedder: DeterministicHashEmbedder | SentenceTransformerEmbedder
     if args.embedder == "sentence-transformers":
         embedder = SentenceTransformerEmbedder(args.st_model)

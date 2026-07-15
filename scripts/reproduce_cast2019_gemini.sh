@@ -18,6 +18,15 @@ export PYTHONHASHSEED=0
 export TOKENIZERS_PARALLELISM=false
 
 python3 -m mapmatched.eval \
+  --benchmark cast2019 \
+  --conversation-limit 50 \
+  --include-gemini-rewrite \
+  --gemini-model "$GEMINI_MODEL" \
+  --gemini-rewrite-cache "$REPORT_DIR/rewrites.json" \
+  --gemini-min-request-interval 13 \
+  --gemini-prefetch-only
+
+python3 -m mapmatched.eval \
   --profile "$PROFILE" \
   --benchmark cast2019 \
   --tier micro \
@@ -34,6 +43,7 @@ python3 -m mapmatched.eval \
   --include-gemini-rewrite \
   --gemini-model "$GEMINI_MODEL" \
   --gemini-rewrite-cache "$REPORT_DIR/rewrites.json" \
+  --gemini-min-request-interval 13 \
   --output "$REPORT_DIR/report.json" \
   --markdown-output "$REPORT_DIR/report.md"
 

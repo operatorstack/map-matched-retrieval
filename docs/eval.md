@@ -125,6 +125,9 @@ networked model request per selected turn; `--conversation-limit` bounds those
 requests. Hosted-model output is not immutable across model revisions.
 Successful rewrites are checkpointed in `rewrites.json`, so rerunning the profile
 resumes after transient API failures instead of repeating completed requests.
+The reproduction script prefetches rewrites at a 13-second interval before
+starting retrieval evaluation, which also supports keys constrained to five
+requests per minute.
 
 ## Graph source and ranking mode
 

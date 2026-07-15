@@ -31,6 +31,7 @@ class GeminiRewriteConfig:
     maximum_attempts: int = 6
     initial_retry_delay: float = 5.0
     maximum_retry_delay: float = 60.0
+    minimum_request_interval: float = 0.0
 
 
 class GeminiQueryRewriter:
@@ -42,14 +43,19 @@ class GeminiQueryRewriter:
         client: object | None = None,
         cache_path: Path | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         if config.maximum_attempts <= 0:
             raise ValueError("maximum_attempts must be greater than zero")
+        if config.minimum_request_interval < 0.0:
+            raise ValueError("minimum_request_interval must be nonnegative")
         self._client = client
         self._generate_content = generate_content
         self._cache_path = cache_path
         self._cache = self._load_cache(cache_path)
         self._sleep = sleep
+        self._monotonic = monotonic
+        self._last_request_time: float | None = None
         self.config = config
 
     def rewrite(self, *, history: Sequence[str], query: str) -> str:
@@ -86,6 +92,7 @@ class GeminiQueryRewriter:
     def _generate_with_retry(self, prompt: str) -> object:
         for attempt in range(self.config.maximum_attempts):
             try:
+                self._wait_for_request_interval()
                 return self._generate_content(
                     model=self.config.model,
                     contents=prompt,
@@ -105,6 +112,15 @@ class GeminiQueryRewriter:
                 )
                 self._sleep(delay)
         raise RuntimeError("Gemini retry loop ended without a response")
+
+    def _wait_for_request_interval(self) -> None:
+        now = self._monotonic()
+        if self._last_request_time is not None:
+            elapsed = now - self._last_request_time
+            delay = self.config.minimum_request_interval - elapsed
+            if delay > 0.0:
+                self._sleep(delay)
+        self._last_request_time = self._monotonic()
 
     @staticmethod
     def _is_retryable(error: Exception) -> bool:
@@ -142,6 +158,7 @@ def create_gemini_query_rewriter(
     api_key: str | None = None,
     model: str = DEFAULT_GEMINI_MODEL,
     cache_path: Path | None = None,
+    minimum_request_interval: float = 0.0,
 ) -> GeminiQueryRewriter:
     effective_api_key = api_key if api_key is not None else os.environ.get("GEMINI_API_KEY")
     if not effective_api_key:
@@ -165,7 +182,10 @@ def create_gemini_query_rewriter(
         )
     return GeminiQueryRewriter(
         generate_content=generate_content,
-        config=GeminiRewriteConfig(model=model),
+        config=GeminiRewriteConfig(
+            model=model,
+            minimum_request_interval=minimum_request_interval,
+        ),
         client=client,
         cache_path=cache_path,
     )
