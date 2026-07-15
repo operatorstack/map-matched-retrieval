@@ -33,6 +33,8 @@ All notable changes to this project are documented here.
   low-request-rate API keys can resume without repeating graph computation.
 - Pin the CAsT baseline to stable, high-volume `gemini-3.1-flash-lite` after
   sustained capacity errors from the 3.5 Flash and 3 Flash preview models.
+- Cap individual Gemini HTTP attempts at 30 seconds and extend bounded retries
+  for occasional capacity stalls during long prefetch runs.
 - Publish the reproducible TopiOCQA n=25 MiniLM/kNN micro-corpus result:
   map-matched β=1.0 lifts follow-up nDCG@3 by `+0.084` with paired 95% CI
   `[+0.046, +0.128]`; two runs produced byte-identical reports.

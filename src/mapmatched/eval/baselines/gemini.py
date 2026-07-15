@@ -28,7 +28,7 @@ class GeminiDependencyUnavailableError(ImportError):
 class GeminiRewriteConfig:
     model: str = DEFAULT_GEMINI_MODEL
     thinking_level: Literal["minimal", "low", "medium", "high"] = "minimal"
-    maximum_attempts: int = 6
+    maximum_attempts: int = 12
     initial_retry_delay: float = 5.0
     maximum_retry_delay: float = 60.0
     minimum_request_interval: float = 0.0
@@ -173,7 +173,10 @@ def create_gemini_query_rewriter(
     client_factory = getattr(genai, "Client", None)
     if not callable(client_factory):
         raise GeminiDependencyUnavailableError("google.genai.Client is unavailable")
-    client = client_factory(api_key=effective_api_key)
+    client = client_factory(
+        api_key=effective_api_key,
+        http_options={"timeout": 30_000},
+    )
     models = getattr(client, "models", None)
     generate_content = getattr(models, "generate_content", None)
     if not callable(generate_content):
