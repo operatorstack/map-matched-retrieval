@@ -104,6 +104,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_GEMINI_MODEL,
         help="Gemini model used by --include-gemini-rewrite.",
     )
+    parser.add_argument(
+        "--gemini-rewrite-cache",
+        type=Path,
+        default=None,
+        help="JSON checkpoint for completed Gemini rewrites.",
+    )
     return parser
 
 
@@ -131,7 +137,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     query_rewriter: ConversationQueryRewriter | None = None
     if args.include_gemini_rewrite:
-        query_rewriter = create_gemini_query_rewriter(model=args.gemini_model)
+        query_rewriter = create_gemini_query_rewriter(
+            model=args.gemini_model,
+            cache_path=args.gemini_rewrite_cache,
+        )
     data_path = _effective_data_path(args.benchmark, args.data_path)
     conversations, passages = load_benchmark(
         args.benchmark,
@@ -169,6 +178,9 @@ def main(argv: list[str] | None = None) -> int:
         query_rewrite_model=args.gemini_model if args.include_gemini_rewrite else None,
         query_rewrite_prompt_version=GEMINI_REWRITE_PROMPT_VERSION
         if args.include_gemini_rewrite
+        else None,
+        query_rewrite_cache_filename=args.gemini_rewrite_cache.name
+        if args.gemini_rewrite_cache is not None
         else None,
     )
     report = run_ablation_grid(

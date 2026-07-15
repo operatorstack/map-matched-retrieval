@@ -123,6 +123,8 @@ from the environment and is never written to reports. Reports record the Gemini
 model and prompt version. The baseline is opt-in because it makes one paid,
 networked model request per selected turn; `--conversation-limit` bounds those
 requests. Hosted-model output is not immutable across model revisions.
+Successful rewrites are checkpointed in `rewrites.json`, so rerunning the profile
+resumes after transient API failures instead of repeating completed requests.
 
 ## Graph source and ranking mode
 

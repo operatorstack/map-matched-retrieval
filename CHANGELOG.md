@@ -27,6 +27,8 @@ All notable changes to this project are documented here.
   retaining the standard-library fallback.
 - Vectorize evaluation retrieval scores with NumPy and retain a bounded query
   score cache, removing per-dimension Python loops from full-corpus baselines.
+- Checkpoint Gemini rewrites after each successful request and retry transient
+  rate-limit/server failures with bounded exponential backoff.
 - Publish the reproducible TopiOCQA n=25 MiniLM/kNN micro-corpus result:
   map-matched β=1.0 lifts follow-up nDCG@3 by `+0.084` with paired 95% CI
   `[+0.046, +0.128]`; two runs produced byte-identical reports.

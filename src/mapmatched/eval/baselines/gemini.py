@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import importlib
+import hashlib
 import json
 import os
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
@@ -25,6 +28,9 @@ class GeminiDependencyUnavailableError(ImportError):
 class GeminiRewriteConfig:
     model: str = DEFAULT_GEMINI_MODEL
     thinking_level: Literal["minimal", "low", "medium", "high"] = "minimal"
+    maximum_attempts: int = 6
+    initial_retry_delay: float = 5.0
+    maximum_retry_delay: float = 60.0
 
 
 class GeminiQueryRewriter:
@@ -34,9 +40,16 @@ class GeminiQueryRewriter:
         generate_content: Callable[..., object],
         config: GeminiRewriteConfig,
         client: object | None = None,
+        cache_path: Path | None = None,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
+        if config.maximum_attempts <= 0:
+            raise ValueError("maximum_attempts must be greater than zero")
         self._client = client
         self._generate_content = generate_content
+        self._cache_path = cache_path
+        self._cache = self._load_cache(cache_path)
+        self._sleep = sleep
         self.config = config
 
     def rewrite(self, *, history: Sequence[str], query: str) -> str:
@@ -47,21 +60,88 @@ class GeminiQueryRewriter:
         prompt = (
             f"{_SYSTEM_INSTRUCTION}\n\nConversation:\n{json.dumps(request, ensure_ascii=False)}"
         )
-        response = self._generate_content(
-            model=self.config.model,
-            contents=prompt,
-            config={"thinking_config": {"thinking_level": self.config.thinking_level}},
-        )
+        cache_key = hashlib.sha256(
+            json.dumps(
+                {
+                    "model": self.config.model,
+                    "prompt_version": GEMINI_REWRITE_PROMPT_VERSION,
+                    "request": request,
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
+        cached_query = self._cache.get(cache_key)
+        if cached_query is not None:
+            return cached_query
+        response = self._generate_with_retry(prompt)
         response_text = getattr(response, "text", None)
         if not isinstance(response_text, str) or not response_text.strip():
             raise RuntimeError("Gemini returned no rewritten query")
-        return response_text.strip()
+        rewritten_query = response_text.strip()
+        self._cache[cache_key] = rewritten_query
+        self._save_cache()
+        return rewritten_query
+
+    def _generate_with_retry(self, prompt: str) -> object:
+        for attempt in range(self.config.maximum_attempts):
+            try:
+                return self._generate_content(
+                    model=self.config.model,
+                    contents=prompt,
+                    config={
+                        "thinking_config": {
+                            "thinking_level": self.config.thinking_level,
+                        }
+                    },
+                )
+            except Exception as error:
+                final_attempt = attempt + 1 == self.config.maximum_attempts
+                if final_attempt or not self._is_retryable(error):
+                    raise
+                delay = min(
+                    self.config.initial_retry_delay * (2**attempt),
+                    self.config.maximum_retry_delay,
+                )
+                self._sleep(delay)
+        raise RuntimeError("Gemini retry loop ended without a response")
+
+    @staticmethod
+    def _is_retryable(error: Exception) -> bool:
+        status_code = getattr(error, "status_code", None)
+        return isinstance(status_code, int) and (status_code == 429 or 500 <= status_code < 600)
+
+    @staticmethod
+    def _load_cache(cache_path: Path | None) -> dict[str, str]:
+        if cache_path is None or not cache_path.exists():
+            return {}
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("Gemini rewrite cache must contain a JSON object")
+        cache: dict[str, str] = {}
+        for key, value in payload.items():
+            if not isinstance(key, str) or not isinstance(value, str):
+                raise ValueError("Gemini rewrite cache keys and values must be strings")
+            cache[key] = value
+        return cache
+
+    def _save_cache(self) -> None:
+        if self._cache_path is None:
+            return
+        self._cache_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = self._cache_path.with_suffix(f"{self._cache_path.suffix}.tmp")
+        temporary_path.write_text(
+            json.dumps(self._cache, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        temporary_path.replace(self._cache_path)
 
 
 def create_gemini_query_rewriter(
     *,
     api_key: str | None = None,
     model: str = DEFAULT_GEMINI_MODEL,
+    cache_path: Path | None = None,
 ) -> GeminiQueryRewriter:
     effective_api_key = api_key if api_key is not None else os.environ.get("GEMINI_API_KEY")
     if not effective_api_key:
@@ -87,4 +167,5 @@ def create_gemini_query_rewriter(
         generate_content=generate_content,
         config=GeminiRewriteConfig(model=model),
         client=client,
+        cache_path=cache_path,
     )

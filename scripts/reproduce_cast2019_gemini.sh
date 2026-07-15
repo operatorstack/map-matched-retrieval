@@ -33,6 +33,7 @@ python3 -m mapmatched.eval \
   --bootstrap-seed 42 \
   --include-gemini-rewrite \
   --gemini-model "$GEMINI_MODEL" \
+  --gemini-rewrite-cache "$REPORT_DIR/rewrites.json" \
   --output "$REPORT_DIR/report.json" \
   --markdown-output "$REPORT_DIR/report.md"
 
