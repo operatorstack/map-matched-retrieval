@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite"
 GEMINI_REWRITE_PROMPT_VERSION = "cast-standalone-v1"
 
 _SYSTEM_INSTRUCTION = """\

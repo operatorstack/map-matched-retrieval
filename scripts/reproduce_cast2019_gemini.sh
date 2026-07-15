@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-GEMINI_MODEL="${MAPMATCHED_GEMINI_MODEL:-gemini-3-flash-preview}"
+GEMINI_MODEL="${MAPMATCHED_GEMINI_MODEL:-gemini-3.1-flash-lite}"
 MODEL_SLUG="${GEMINI_MODEL//\//-}"
 PROFILE="cast2019-$MODEL_SLUG-minilm-knn-full"
 REPORT_DIR="${MAPMATCHED_REPORT_DIR:-$ROOT_DIR/reports/$PROFILE}"

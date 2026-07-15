@@ -116,7 +116,7 @@ Without the collection the loader degrades to using doc ids as passage text
 the follow-up-lift claim than TopiOCQA's topic switches.
 
 The script adds `gemini_rewrite` to the normal ablation grid. It sends each raw
-utterance and its prior user utterances to `gemini-3-flash-preview` with minimal
+utterance and its prior user utterances to `gemini-3.1-flash-lite` with minimal
 thinking, retrieves with the returned standalone query, and compares it with both
 pointwise retrieval and CAsT's manual `resolved_oracle`. `GEMINI_API_KEY` is read
 from the environment and is never written to reports. Reports record the Gemini
